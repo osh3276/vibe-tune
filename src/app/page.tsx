@@ -1,20 +1,5 @@
 "use client";
 
-import { useState } from "react";
-import { musicApi, handleApiError } from "@/lib/axios";
-
-export default function Home() {
-	const [prompt, setPrompt] = useState("");
-	const [negativeTags, setNegativeTags] = useState("");
-
-	const [generating, setGenerating] = useState(false);
-	const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
-	const [audioUrl, setAudioUrl] = useState<string>("");
-	const [audioMetadata, setAudioMetadata] = useState<{
-		duration: number;
-		sampleRate: number;
-		channels: number;
-	} | null>(null);
 import { useState, useCallback, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -30,8 +15,19 @@ import {
 import { Music, Video, Sparkles, Play, ArrowRight, LogOut } from "lucide-react";
 import AlbumGrid from "@/components/AlbumGrid";
 import { useAuth } from "@/lib/auth";
+import { musicApi, handleApiError } from "@/lib/axios";
 
 export default function Home() {
+	const [prompt, setPrompt] = useState("");
+	const [negativeTags, setNegativeTags] = useState("");
+	const [generating, setGenerating] = useState(false);
+	const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+	const [audioUrl, setAudioUrl] = useState<string>("");
+	const [audioMetadata, setAudioMetadata] = useState<{
+		duration: number;
+		sampleRate: number;
+		channels: number;
+	} | null>(null);
 	const [showMainContent, setShowMainContent] = useState(false);
 	const { user, loading, signOut } = useAuth();
 	const router = useRouter();
@@ -43,6 +39,8 @@ export default function Home() {
 		return () => window.removeEventListener("scroll", onScroll);
 	}, []);
 
+	const generateMusic = async (e: React.FormEvent) => {
+		e.preventDefault();
 		setGenerating(true);
 		setAudioBlob(null);
 		setAudioUrl("");
@@ -118,31 +116,6 @@ export default function Home() {
 			{/* Animated Album Grid Background - Always visible initially */}
 			<AlbumGrid onAnimationComplete={handleAnimationComplete} />
 
-				<div className="bg-white p-6 rounded-lg shadow-md mb-8">
-					<h2 className="text-xl font-semibold mb-4 text-gray-800">
-						Generate Music with Lyria-002
-					</h2>
-					<form onSubmit={generateMusic} className="space-y-4">
-						<div>
-							<textarea
-								placeholder="Describe the music you want to generate (e.g., 'upbeat jazz piano with light drums')"
-								value={prompt}
-								onChange={(e) => setPrompt(e.target.value)}
-								required
-								rows={3}
-								className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-							/>
-						</div>
-						<div>
-							<input
-								type="text"
-								placeholder="Negative prompt (e.g., drums, electric guitar)"
-								value={negativeTags}
-								onChange={(e) =>
-									setNegativeTags(e.target.value)
-								}
-								className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-							/>
 			{/* Main Content - Only show after animation is complete */}
 			{showMainContent && (
 				<div className="relative z-10 border-black">
@@ -323,6 +296,11 @@ export default function Home() {
 								>
 									Download WAV
 								</button>
+							</div>
+						</div>
+					</div>
+				)}
+
 					{/* CTA Section - Third to appear */}
 					<motion.section
 						className="px-6 pt-10 pb-20"
