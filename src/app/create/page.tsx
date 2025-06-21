@@ -75,16 +75,26 @@ function CreatePage() {
 		chunksRef.current = [];
 		setRecordedChunks([]);
 
-		// Try different mime types for better compatibility
-		let mimeType = "video/webm;codecs=vp9";
-		if (!MediaRecorder.isTypeSupported(mimeType)) {
-			mimeType = "video/webm;codecs=vp8";
-			if (!MediaRecorder.isTypeSupported(mimeType)) {
-				mimeType = "video/webm";
-				if (!MediaRecorder.isTypeSupported(mimeType)) {
-					mimeType = "video/mp4";
+		// Detect best mimeType for browser compatibility
+		function getSupportedMimeType() {
+			const possibleTypes = [
+				"video/webm;codecs=vp9,opus",
+				"video/webm;codecs=vp8,opus",
+				"video/webm",
+				"video/mp4",
+			];
+			for (const type of possibleTypes) {
+				if (MediaRecorder.isTypeSupported(type)) {
+					return type;
 				}
 			}
+			return ""; // No supported type
+		}
+
+		const mimeType = getSupportedMimeType();
+		if (!mimeType) {
+			alert("Your browser does not support video recording. Please use Chrome or a browser with MediaRecorder support.");
+			return;
 		}
 
 		const recorder = new MediaRecorder(streamRef.current, {
@@ -108,7 +118,6 @@ function CreatePage() {
 			}
 			
 			const blob = new Blob(chunksRef.current, { type: mimeType });
-			console.log("Created blob:", blob.size, "bytes, type:", blob.type);
 			const url = URL.createObjectURL(blob);
 			console.log("Created URL:", url);
 			
