@@ -349,39 +349,126 @@ function CreatePage() {
 			return;
 		}
 
+		if (!user) {
+			alert("Please log in to create songs!");
+			return;
+		}
+
 		setIsGenerating(true);
 
 		try {
-			// Convert video URL back to blob
-			const response = await fetch(recordedVideo);
-			const videoBlob = await response.blob();
-			
-			// Prepare FormData for binary upload
-			const formData = new FormData();
-			formData.append("video", videoBlob, "video.webm"); // or video.mp4 if that's your type
-			formData.append("userText", description);
-			formData.append("title", "My Generated Song");
-			formData.append("isAudioless", "true"); // Indicate this is a video without audio
-			
-			// Simulate API call for now (replace with actual API call in production)
-			console.log("Submitting video for song generation...");
-			console.log("Form data:", {
-				videoSize: videoBlob.size,
-				description: description,
-				isAudioless: true
+			// First, create a song record in the database
+			const songTitle = description.trim() || `Song ${new Date().toLocaleDateString()}`;
+			const songResponse = await fetch("/api/song", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					title: songTitle,
+					description: description.trim() || undefined,
+					user_id: user.id,
+					status: "processing",
+					parameters: {
+						prompt: description,
+						originalVideoUrl: recordedVideo,
+					},
+				}),
 			});
-			
-			// For now, simulate API call
-			setTimeout(() => {
-				setIsGenerating(false);
-				// Redirect to song view page
-				window.location.href = "/song/123";
-			}, 3000);
-			
+
+			if (!songResponse.ok) {
+				throw new Error("Failed to create song record");
+			}
+
+			const songData = await songResponse.json();
+			console.log("Created song record:", songData);
+
+			// Redirect to dashboard to show the processing song
+			router.push("/dashboard");
+
+			// Continue with generation in the background
+			setTimeout(async () => {
+				try {
+					// Convert video URL back to blob
+					const response = await fetch(recordedVideo);
+					const videoBlob = await response.blob();
+
+					// Prepare FormData for binary upload
+					const formData = new FormData();
+					formData.append("video", videoBlob, "video.webm");
+					formData.append("userText", description);
+					formData.append("title", songTitle);
+
+					// Call the song generation API
+					console.log("Submitting video for song generation...");
+					const apiResponse = await fetch("/api/generate", {
+						method: "POST",
+						body: formData,
+					});
+
+					const contentType = apiResponse.headers.get("content-type") || "";
+
+					if (contentType.includes("application/json")) {
+						const errorData = await apiResponse.json();
+						throw new Error(errorData.error || "Failed to generate song");
+					} else if (contentType.includes("audio/wav")) {
+						const audioBlob = await apiResponse.blob();
+
+						// Upload the audio file to get a persistent URL
+						const uploadFormData = new FormData();
+						uploadFormData.append("audio", audioBlob, `${songData.id}.wav`);
+						uploadFormData.append("songId", songData.id);
+
+						const uploadResponse = await fetch("/api/upload", {
+							method: "POST",
+							body: uploadFormData,
+						});
+
+						if (!uploadResponse.ok) {
+							throw new Error("Failed to upload audio file");
+						}
+
+						const uploadData = await uploadResponse.json();
+
+						// Update the song record with the file URL and completed status
+						await fetch(`/api/song/${songData.id}`, {
+							method: "PUT",
+							headers: {
+								"Content-Type": "application/json",
+							},
+							body: JSON.stringify({
+								file_url: uploadData.fileUrl,
+								status: "completed",
+							}),
+						});
+
+						console.log("Song generation completed successfully!");
+					} else {
+						throw new Error("Unexpected response from server");
+					}
+				} catch (error) {
+					console.error("Song generation error:", error);
+
+					// Update the song record to failed status
+					await fetch(`/api/song/${songData.id}`, {
+						method: "PUT",
+						headers: {
+							"Content-Type": "application/json",
+						},
+						body: JSON.stringify({
+							status: "failed",
+						}),
+					});
+				}
+			}, 1000);
 		} catch (error) {
-			console.error("Song generation error:", error);
+			console.error("Song creation error:", error);
+			alert(
+				error instanceof Error
+					? error.message
+					: "Failed to create song. Please try again."
+			);
 			setIsGenerating(false);
-			alert("Failed to generate song. Please try again.");
 		}
 	};
 
