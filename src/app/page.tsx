@@ -15,19 +15,8 @@ import {
 import { Music, Video, Sparkles, Play, ArrowRight, LogOut } from "lucide-react";
 import AlbumGrid from "@/components/AlbumGrid";
 import { useAuth } from "@/lib/auth";
-import { musicApi, handleApiError } from "@/lib/axios";
 
 export default function Home() {
-	const [prompt, setPrompt] = useState("");
-	const [negativeTags, setNegativeTags] = useState("");
-	const [generating, setGenerating] = useState(false);
-	const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
-	const [audioUrl, setAudioUrl] = useState<string>("");
-	const [audioMetadata, setAudioMetadata] = useState<{
-		duration: number;
-		sampleRate: number;
-		channels: number;
-	} | null>(null);
 	const [showMainContent, setShowMainContent] = useState(false);
 	const { user, loading, signOut } = useAuth();
 	const router = useRouter();
@@ -39,38 +28,6 @@ export default function Home() {
 		return () => window.removeEventListener("scroll", onScroll);
 	}, []);
 
-	const generateMusic = async (e: React.FormEvent) => {
-		e.preventDefault();
-		setGenerating(true);
-		setAudioBlob(null);
-		setAudioUrl("");
-		setAudioMetadata(null);
-
-		try {
-			const result = await musicApi.generateMusic({
-				prompt: prompt.trim(),
-				negativeTags: negativeTags.trim() || undefined,
-			});
-
-			const url = URL.createObjectURL(result.audioBlob);
-
-			setAudioBlob(result.audioBlob);
-			setAudioUrl(url);
-			setAudioMetadata({
-				duration: result.duration,
-				sampleRate: result.sampleRate,
-				channels: result.channels,
-			});
-
-			alert("Song generated successfully!");
-		} catch (err) {
-			console.error("Generation error:", err);
-			const errorMessage = handleApiError(err);
-			alert(`Error: ${errorMessage}`);
-		} finally {
-			setGenerating(false);
-		}
-	};
 	// Redirect authenticated users to dashboard
 	useEffect(() => {
 		if (!loading && user) {
@@ -99,17 +56,6 @@ export default function Home() {
 	if (user) {
 		return null; // Will redirect in useEffect
 	}
-
-	const downloadAudio = () => {
-		if (audioBlob) {
-			const link = document.createElement("a");
-			link.href = audioUrl;
-			link.download = `generated-song-${Date.now()}.wav`;
-			document.body.appendChild(link);
-			link.click();
-			document.body.removeChild(link);
-		}
-	};
 
 	return (
 		<div className="min-h-screen bg-[#fcf8f2] relative font-inter">
@@ -247,74 +193,6 @@ export default function Home() {
 							</div>
 						</div>
 					</motion.section>
-
-				{audioUrl && (
-					<div className="bg-white p-6 rounded-lg shadow-md">
-						<h3 className="text-xl font-semibold mb-4 text-gray-800">
-							Your Generated Song
-						</h3>
-						<div className="space-y-4">
-							<div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-700">
-								<div>
-									<strong>Duration:</strong>{" "}
-									{audioMetadata?.duration
-										? `${audioMetadata.duration.toFixed(1)}s`
-										: "Unknown"}
-								</div>
-								<div>
-									<strong>Sample Rate:</strong>{" "}
-									{audioMetadata?.sampleRate
-										? `${audioMetadata.sampleRate} Hz`
-										: "Unknown"}
-								</div>
-								<div>
-									<strong>Channels:</strong>{" "}
-									{audioMetadata?.channels === 1
-										? "Mono"
-										: audioMetadata?.channels === 2
-											? "Stereo"
-											: audioMetadata?.channels ||
-												"Unknown"}
-								</div>
-							</div>
-
-							<div className="border-t pt-4">
-								<div className="mb-3">
-									<strong className="text-gray-800">
-										Prompt:
-									</strong>
-									<p className="text-gray-600 mt-1">
-										{prompt}
-									</p>
-								</div>
-								{negativeTags && (
-									<div className="mb-3">
-										<strong className="text-gray-800">
-											Negative Prompt:
-										</strong>
-										<p className="text-gray-600 mt-1">
-											{negativeTags}
-										</p>
-									</div>
-								)}
-							</div>
-
-							<div className="flex items-center gap-3">
-								<audio controls className="flex-1">
-									<source src={audioUrl} type="audio/wav" />
-									Your browser does not support audio
-									playback.
-								</audio>
-								<button
-									onClick={downloadAudio}
-									className="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 text-sm whitespace-nowrap"
-								>
-									Download WAV
-								</button>
-							</div>
-						</div>
-					</div>
-				)}
 
 					{/* CTA Section - Third to appear */}
 					<motion.section
