@@ -7,7 +7,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Music, Video, Camera, Mic, ArrowLeft, Play, Square, X, Sparkles } from "lucide-react";
+import { Music, Video, Camera, Mic, ArrowLeft, Play, Square, X, Sparkles, Settings } from "lucide-react";
 
 function CreatePage() {
 	// Recording states
@@ -21,6 +21,9 @@ function CreatePage() {
 	const [countdown, setCountdown] = useState(3);
 	const [recordingTime, setRecordingTime] = useState(0);
 	const [maxRecordingTime] = useState(30); // 30 seconds max
+	const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([]);
+	const [selectedCamera, setSelectedCamera] = useState<string>("");
+	const [showCameraSelector, setShowCameraSelector] = useState(false);
 	const { user, loading, signOut } = useAuth();
 	const router = useRouter();
 	const videoRef = useRef<HTMLVideoElement>(null);
@@ -37,6 +40,35 @@ function CreatePage() {
 		}
 	}, [user, loading, router]);
 	
+	// Get available cameras when component mounts
+	useEffect(() => {
+		async function getAvailableCameras() {
+			try {
+				// First, check if we have permission to access cameras
+				const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+				
+				// After getting permission, list all video devices
+				const devices = await navigator.mediaDevices.enumerateDevices();
+				const videoDevices = devices.filter(device => device.kind === 'videoinput');
+				
+				console.log('Available cameras:', videoDevices);
+				setAvailableCameras(videoDevices);
+				
+				// Set first camera as default if available
+				if (videoDevices.length > 0 && !selectedCamera) {
+					setSelectedCamera(videoDevices[0].deviceId);
+				}
+				
+				// Stop the initial permission stream
+				stream.getTracks().forEach(track => track.stop());
+			} catch (err) {
+				console.error('Error getting camera list:', err);
+				alert('Unable to access camera. Please check your camera permissions.');
+			}
+		}
+		
+		getAvailableCameras();
+	}, [selectedCamera]);
 
 	// Cleanup intervals on unmount
 	useEffect(() => {
@@ -50,6 +82,26 @@ function CreatePage() {
 		};
 	}, []);
 
+	// Ensure video element is properly showing stream whenever recording state changes
+	useEffect(() => {
+		// Only run this when we're not in playback and we have an active stream
+		if (recordingState !== "playback" && streamRef.current && videoRef.current) {
+			console.log("Reconnecting video element to stream...");
+			
+			// Ensure the video element is connected to the stream
+			if (videoRef.current.srcObject !== streamRef.current) {
+				videoRef.current.srcObject = streamRef.current;
+			}
+			
+			// Make sure the video is playing
+			if (videoRef.current.paused) {
+				videoRef.current.play().catch(err => {
+					console.error("Error playing video after state change:", err);
+				});
+			}
+		}
+	}, [recordingState]);
+	
 	// Handle playback video loading
 	useEffect(() => {
 		if (recordingState === "playback" && recordedVideo && playbackVideoRef.current) {
@@ -64,21 +116,36 @@ function CreatePage() {
 			});
 		}
 	}, [recordingState, recordedVideo]);
-
 	const startActualRecording = useCallback(() => {
 		if (!streamRef.current) {
 			console.error("No stream available for recording");
 			return;
 		}
+		
+		console.log("Starting actual recording with stream:", 
+			streamRef.current.active, 
+			"video tracks:", 
+			streamRef.current.getVideoTracks().length
+		);
+		
+		// Verify video element is still showing the stream
+		if (videoRef.current && videoRef.current.srcObject !== streamRef.current) {
+			console.log("Re-attaching stream to video element");
+			videoRef.current.srcObject = streamRef.current;
+			videoRef.current.play().catch(err => {
+				console.error("Error playing video at recording start:", err);
+			});
+		}
 
 		// Reset recorded chunks
 		chunksRef.current = [];
 		setRecordedChunks([]);
-
-		// Detect best mimeType for browser compatibility
+		// Detect best mimeType for browser compatibility (without audio codecs since we disabled audio)
 		function getSupportedMimeType() {
-			const possibleTypes = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm", "video/mp4"];
+			// Use video-only codecs since we're not recording audio
+			const possibleTypes = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm", "video/mp4"];
 			for (const type of possibleTypes) {
+				console.log(`Testing mime type: ${type} - Supported: ${MediaRecorder.isTypeSupported(type)}`);
 				if (MediaRecorder.isTypeSupported(type)) {
 					return type;
 				}
@@ -91,10 +158,16 @@ function CreatePage() {
 			alert("Your browser does not support video recording. Please use Chrome or a browser with MediaRecorder support.");
 			return;
 		}
-
-		const recorder = new MediaRecorder(streamRef.current, {
+		
+		console.log(`Using mime type for recording: ${mimeType}`);
+		// Configure recorder with optimal settings for visibility during recording
+		const recorderOptions = {
 			mimeType: mimeType,
-		});
+			videoBitsPerSecond: 2500000, // 2.5 Mbps for good quality
+		};
+		
+		console.log("Creating MediaRecorder with options:", recorderOptions);
+		const recorder = new MediaRecorder(streamRef.current, recorderOptions);
 
 		recorder.ondataavailable = (event) => {
 			if (event.data.size > 0) {
@@ -247,7 +320,6 @@ function CreatePage() {
 			setCountdown(3);
 		}
 	}, [recordedVideo, recordingState, mediaRecorder]);
-
 	const startRecording = useCallback(async () => {
 		try {
 			console.log("Starting recording process...");
@@ -269,27 +341,49 @@ function CreatePage() {
 				recordingIntervalRef.current = null;
 			}
 
-			// Get camera access
-			const stream = await navigator.mediaDevices.getUserMedia({
+			// Get camera access with selected camera
+			const constraints = {
 				video: {
 					width: { ideal: 1920 },
 					height: { ideal: 1080 },
+					deviceId: selectedCamera ? { exact: selectedCamera } : undefined
 				},
-				audio: true,
-			});
+				audio: false, // Disable audio recording
+			};
+
+			console.log('Using camera constraints:', constraints);
+			const stream = await navigator.mediaDevices.getUserMedia(constraints);
+			console.log('Stream received:', stream.active, 'video tracks:', stream.getVideoTracks().length);
+			
+			if (stream.getVideoTracks().length === 0) {
+				throw new Error("No video track available in the stream");
+			}
 
 			streamRef.current = stream;
 			if (videoRef.current) {
 				videoRef.current.srcObject = stream;
+				videoRef.current.onloadedmetadata = () => {
+					console.log("Video element metadata loaded");
+					videoRef.current?.play().catch(err => {
+						console.error("Error playing video:", err);
+					});
+				};
+				
+				// Add error handling
+				videoRef.current.onerror = (err) => {
+					console.error("Video element error:", err);
+				};
+			} else {
+				console.error("Video reference is null");
 			}
 
 			// Start countdown
 			startCountdown();
 		} catch (error) {
 			console.error("Error accessing camera:", error);
-			alert("Unable to access camera. Please check permissions.");
+			alert("Unable to access selected camera. Please try another camera or check permissions.");
 		}
-	}, [startCountdown]);
+	}, [startCountdown, selectedCamera]);
 
 	const handleSubmit = async () => {
 		if (!recordedVideo) {
@@ -302,13 +396,12 @@ function CreatePage() {
 		try {
 			// Convert video URL back to blob
 			const response = await fetch(recordedVideo);
-			const videoBlob = await response.blob();
-
-			// Prepare FormData for binary upload
+			const videoBlob = await response.blob();			// Prepare FormData for binary upload
 			const formData = new FormData();
 			formData.append("video", videoBlob, "video.webm"); // or video.mp4 if that's your type
 			formData.append("userText", description);
 			formData.append("title", "My Generated Song");
+			formData.append("isAudioless", "true"); // Indicate this is a video without audio
 
 			// Call the song generation API
 			console.log("Submitting video for song generation...");
@@ -369,8 +462,7 @@ function CreatePage() {
 					{/* Main Theatre Content */}
 					<div className="flex-1 flex items-center justify-center relative">
 						{/* Video Display */}
-						<div className="relative w-full max-w-6xl aspect-video">
-							{recordingState === "playback" && recordedVideo ? (
+						<div className="relative w-full max-w-6xl aspect-video">							{recordingState === "playback" && recordedVideo ? (
 								<video
 									ref={playbackVideoRef}
 									src={recordedVideo}
@@ -386,7 +478,17 @@ function CreatePage() {
 									}}
 								/>
 							) : (
-								<video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover rounded-lg" />
+								<video 
+									ref={videoRef} 
+									autoPlay 
+									muted 
+									playsInline 
+									className="w-full h-full object-cover rounded-lg bg-black" 
+									style={{ display: 'block' }}
+									onLoadedMetadata={() => console.log("Live camera metadata loaded")}
+									onPlaying={() => console.log("Live camera playing")}
+									onError={(e) => console.error("Live camera error:", e)}
+								/>
 							)}
 
 							{/* Countdown Overlay */}
@@ -419,13 +521,53 @@ function CreatePage() {
 										</Button>
 									</div>
 								</>
-							)}
-
-							{/* Exit Theatre Mode Button */}
-							<div className="absolute top-8 left-8">
+							)}							{/* Exit Theatre Mode Button */}
+							<div className="absolute top-8 left-8 flex items-center gap-2">
 								<Button onClick={exitTheatreMode} variant="ghost" size="lg" className="bg-black/50 hover:bg-black/70 backdrop-blur-sm text-white rounded-full p-3 border border-white/20">
 									<X className="h-5 w-5" />
 								</Button>
+								
+								{recordingState !== "playback" && (
+									<div className="relative">
+										<Button 
+											onClick={() => setShowCameraSelector(!showCameraSelector)} 
+											variant="ghost"
+											size="lg"
+											className="bg-black/50 hover:bg-black/70 backdrop-blur-sm text-white rounded-full p-3 border border-white/20"
+										>
+											<Camera className="h-5 w-5" />
+										</Button>
+
+										{/* Camera Dropdown in Theatre Mode */}
+										{showCameraSelector && (
+											<div className="absolute top-full mt-2 w-64 bg-black/80 backdrop-blur-sm rounded-lg p-2 border border-white/20 shadow-lg z-10">
+												<div className="text-white text-sm font-semibold mb-2 px-2">Select Camera Source</div>
+												{availableCameras.length === 0 ? (
+													<div className="text-gray-400 text-sm p-2">No cameras detected</div>
+												) : (
+													<div className="space-y-1 max-h-40 overflow-auto">
+														{availableCameras.map((camera) => (
+															<button
+																key={camera.deviceId}
+																className={`w-full text-left px-3 py-2 rounded text-sm ${
+																	selectedCamera === camera.deviceId
+																		? "bg-[#3fd342]/20 text-white"
+																		: "text-gray-300 hover:bg-white/10"
+																}`}
+																onClick={() => {
+																	setSelectedCamera(camera.deviceId);
+																	setShowCameraSelector(false);
+																}}
+															>
+																{camera.label || `Camera ${camera.deviceId.substring(0, 5)}...`}
+															</button>
+														))}
+													</div>
+												)}
+											</div>
+										)}
+									</div>
+								)}
 							</div>
 
 							{/* Playback Controls */}
@@ -502,24 +644,81 @@ function CreatePage() {
 				<div className="flex h-[calc(100vh-88px)]">
 					{/* Main Camera Section */}
 					<div className="flex-1 p-6 flex flex-col">
-						<div className="text-center mb-6">
-							<h1 className="text-4xl font-bold text-[#030c03] mb-2">Create Your Song</h1>
-							<p className="text-[#030c03]/70">Record a video to capture your mood and let AI generate your unique song</p>
+						<div className="text-center mb-6">							<h1 className="text-4xl font-bold text-[#030c03] mb-2">Create Your Song</h1>
+							<p className="text-[#030c03]/70">Record a video (without audio) to capture your mood and let AI generate your unique song</p>
 						</div>
 
 						{/* Large Camera/Video Display */}
 						<div className="flex-1 flex items-center justify-center">
 							<div className="relative w-full max-w-4xl aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl">
-								{recordedVideo ? <video src={recordedVideo} controls className="w-full h-full object-cover" /> : <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover" />}
-
-								{/* Start Recording Button */}
+								{recordedVideo ? (
+									<video 
+										src={recordedVideo} 
+										controls 
+										className="w-full h-full object-cover" 
+									/>
+								) : (
+									<video 
+										ref={videoRef} 
+										autoPlay 
+										muted 
+										playsInline 
+										className="w-full h-full object-cover bg-black" 
+										style={{ display: 'block' }}
+									/>
+								)}								{/* Camera Selection & Start Recording Button */}
 								{!recordedVideo && (
-									<div className="absolute bottom-8 left-1/2 transform -translate-x-1/2">
-										<Button onClick={startRecording} size="lg" className="bg-[#3fd342] hover:bg-[#3fd342]/80 text-[#030c03] px-8 py-4 text-lg shadow-lg rounded-full">
-											<Video className="h-6 w-6 mr-3" />
-											Start Recording
-										</Button>
-									</div>
+									<>
+										<div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 flex flex-col gap-4 items-center">
+											{/* Camera Selection Button */}
+											<div className="relative">
+												<Button 
+													onClick={() => setShowCameraSelector(!showCameraSelector)} 
+													variant="outline" 
+													className="bg-white/20 border-white/30 text-white hover:bg-white/30 backdrop-blur-sm flex items-center gap-2"
+												>
+													<Camera className="h-4 w-4" />
+													{availableCameras.find(c => c.deviceId === selectedCamera)?.label || "Select Camera"}
+													<Settings className="h-4 w-4 ml-1" />
+												</Button>
+
+												{/* Camera Dropdown */}
+												{showCameraSelector && (
+													<div className="absolute bottom-full mb-2 w-64 bg-black/80 backdrop-blur-sm rounded-lg p-2 border border-white/20 shadow-lg z-10">
+														<div className="text-white text-sm font-semibold mb-2 px-2">Select Camera Source</div>
+														{availableCameras.length === 0 ? (
+															<div className="text-gray-400 text-sm p-2">No cameras detected</div>
+														) : (
+															<div className="space-y-1 max-h-40 overflow-auto">
+																{availableCameras.map((camera) => (
+																	<button
+																		key={camera.deviceId}
+																		className={`w-full text-left px-3 py-2 rounded text-sm ${
+																			selectedCamera === camera.deviceId
+																				? "bg-[#3fd342]/20 text-white"
+																				: "text-gray-300 hover:bg-white/10"
+																		}`}
+																		onClick={() => {
+																			setSelectedCamera(camera.deviceId);
+																			setShowCameraSelector(false);
+																		}}
+																	>
+																		{camera.label || `Camera ${camera.deviceId.substring(0, 5)}...`}
+																	</button>
+																))}
+															</div>
+														)}
+													</div>
+												)}
+											</div>
+
+											{/* Start Recording Button */}
+											<Button onClick={startRecording} size="lg" className="bg-[#3fd342] hover:bg-[#3fd342]/80 text-[#030c03] px-8 py-4 text-lg shadow-lg rounded-full">
+												<Video className="h-6 w-6 mr-3" />
+												Start Recording
+											</Button>
+										</div>
+									</>
 								)}
 
 								{/* Re-record Button for recorded video */}
