@@ -48,7 +48,7 @@ export async function PUT(
 
     // If we're updating status/file_url (from generation process), don't require title
     const isStatusUpdate = status !== undefined || file_url !== undefined;
-    
+
     if (!isStatusUpdate && !title?.trim()) {
       return NextResponse.json({ error: "Title is required" }, { status: 400 });
     }
