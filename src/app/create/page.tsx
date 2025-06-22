@@ -23,6 +23,9 @@ import {
   Square,
   X,
   Sparkles,
+  Settings,
+  ChevronDown,
+  RefreshCw,
 } from "lucide-react";
 
 function CreatePage() {
@@ -41,6 +44,9 @@ function CreatePage() {
   const [countdown, setCountdown] = useState(3);
   const [recordingTime, setRecordingTime] = useState(0);
   const [maxRecordingTime] = useState(30); // 30 seconds max
+  const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([]);
+  const [selectedCameraId, setSelectedCameraId] = useState<string>("");
+  const [showCameraSelector, setShowCameraSelector] = useState(false);
   const { user, loading, signOut } = useAuth();
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -57,36 +63,158 @@ function CreatePage() {
     }
   }, [user, loading, router]);
 
-  // Cleanup intervals on unmount
+  // Initialize camera on component mount
   useEffect(() => {
+    let isMounted = true;
+
+    const initializeCamera = async () => {
+      try {
+        // Get available cameras first
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = devices.filter(device => device.kind === 'videoinput');
+        
+        if (isMounted) {
+          setAvailableCameras(videoDevices);
+          
+          // Set default camera (prefer back camera if available)
+          if (videoDevices.length > 0 && !selectedCameraId) {
+            const backCamera = videoDevices.find(device =>
+              device.label.toLowerCase().includes('back') ||
+              device.label.toLowerCase().includes('rear')
+            );
+            const defaultCamera = backCamera || videoDevices[0];
+            setSelectedCameraId(defaultCamera.deviceId);
+          }
+        }
+
+        if (recordingState === "idle" && !streamRef.current) {
+          const constraints = {
+            video: {
+              width: { ideal: 1920 },
+              height: { ideal: 1080 },
+              deviceId: selectedCameraId ? { exact: selectedCameraId } : undefined,
+            },
+            audio: true,
+          };
+
+          const stream = await navigator.mediaDevices.getUserMedia(constraints);
+
+          if (isMounted) {
+            streamRef.current = stream;
+            if (videoRef.current) {
+              videoRef.current.srcObject = stream;
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Error initializing camera:", error);
+      }
+    };
+
+    initializeCamera();
+
     return () => {
+      isMounted = false;
+      // Cleanup intervals on unmount
       if (countdownIntervalRef.current) {
         clearInterval(countdownIntervalRef.current);
       }
       if (recordingIntervalRef.current) {
         clearInterval(recordingIntervalRef.current);
       }
+      // Cleanup stream on unmount
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+      }
     };
-  }, []);
+  }, [selectedCameraId, recordingState]);
 
-  // Handle playback video loading
+  // Handle video display based on recording state
   useEffect(() => {
-    if (
-      recordingState === "playback" &&
-      recordedVideo &&
-      playbackVideoRef.current
-    ) {
+    if (recordingState === "playback" && recordedVideo && playbackVideoRef.current) {
       const video = playbackVideoRef.current;
       video.src = recordedVideo;
       video.load();
-
-      // Try to play the video
       video.play().catch((error) => {
         console.warn("Auto-play failed:", error);
-        // Auto-play might be blocked, but user can still click play
+      });
+    } else if (recordingState !== "playback" && videoRef.current && streamRef.current) {
+      // Ensure live camera feed is displayed in all non-playback states (idle, countdown, recording)
+      videoRef.current.srcObject = streamRef.current;
+      // Force the video to play to ensure it's visible
+      videoRef.current.play().catch((error) => {
+        console.warn("Video play failed:", error);
       });
     }
   }, [recordingState, recordedVideo]);
+
+  // Close camera selector when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showCameraSelector) {
+        const target = event.target as Element;
+        if (!target.closest('.camera-selector')) {
+          setShowCameraSelector(false);
+        }
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showCameraSelector]);
+
+  const switchCamera = useCallback(async (deviceId: string) => {
+    try {
+      // Stop current stream
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+      }
+
+      // Get new stream with selected camera
+      const constraints = {
+        video: {
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+          deviceId: { exact: deviceId },
+        },
+        audio: true,
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      streamRef.current = stream;
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+      
+      setSelectedCameraId(deviceId);
+      setShowCameraSelector(false);
+    } catch (error) {
+      console.error("Error switching camera:", error);
+      alert("Unable to switch camera. Please try again.");
+    }
+  }, []);
+
+  const refreshCameras = useCallback(async () => {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = devices.filter(device => device.kind === 'videoinput');
+      setAvailableCameras(videoDevices);
+      
+      // If current camera is no longer available, switch to first available
+      if (selectedCameraId && !videoDevices.find(d => d.deviceId === selectedCameraId)) {
+        if (videoDevices.length > 0) {
+          await switchCamera(videoDevices[0].deviceId);
+        }
+      }
+    } catch (error) {
+      console.error("Error refreshing cameras:", error);
+    }
+  }, [selectedCameraId, switchCamera]);
 
   const startActualRecording = useCallback(() => {
     if (!streamRef.current) {
@@ -94,9 +222,20 @@ function CreatePage() {
       return;
     }
 
+    console.log("Starting actual recording...");
+
     // Reset recorded chunks
     chunksRef.current = [];
     setRecordedChunks([]);
+
+    // Ensure video element continues to show live feed during recording
+    if (videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+      // Make sure the video is playing and visible
+      videoRef.current.play().catch((error) => {
+        console.warn("Video play failed during recording start:", error);
+      });
+    }
 
     // Detect best mimeType for browser compatibility
     function getSupportedMimeType() {
@@ -146,17 +285,6 @@ function CreatePage() {
       const url = URL.createObjectURL(blob);
       console.log("Created URL:", url);
 
-      // Stop the live stream
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => track.stop());
-        streamRef.current = null;
-      }
-
-      // Clear the live video element
-      if (videoRef.current) {
-        videoRef.current.srcObject = null;
-      }
-
       // Set the recorded video and switch to playback
       setRecordedVideo(url);
       setRecordingState("playback");
@@ -176,25 +304,20 @@ function CreatePage() {
       recordingIntervalRef.current = null;
     }
 
-    // Start recording timer with fresh ref
+    // Start recording timer
+    let currentTime = 0;
     recordingIntervalRef.current = setInterval(() => {
-      setRecordingTime((prevTime) => {
-        const newTime = prevTime + 1;
-        console.log("Timer tick:", newTime, "seconds");
+      currentTime++;
+      setRecordingTime(currentTime);
+      console.log("Timer tick:", currentTime, "seconds");
 
-        // Auto-stop at max time
-        if (newTime >= 30) {
-          console.log("Max recording time reached, stopping...");
-          if (
-            mediaRecorderRef.current &&
-            mediaRecorderRef.current.state === "recording"
-          ) {
-            mediaRecorderRef.current.stop();
-          }
-          return 30;
+      // Auto-stop at max time
+      if (currentTime >= 30) {
+        console.log("Max recording time reached, stopping...");
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+          mediaRecorderRef.current.stop();
         }
-        return newTime;
-      });
+      }
     }, 1000);
   }, []);
 
@@ -203,22 +326,26 @@ function CreatePage() {
     setRecordingState("countdown");
     setCountdown(3);
 
+    // Clear any existing countdown interval
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+    }
+
+    let currentCount = 3;
     countdownIntervalRef.current = setInterval(() => {
-      setCountdown((prev) => {
-        console.log("Countdown:", prev);
-        if (prev <= 1) {
-          if (countdownIntervalRef.current) {
-            clearInterval(countdownIntervalRef.current);
-            countdownIntervalRef.current = null;
-          }
-          // Start actual recording after countdown
-          setTimeout(() => {
-            startActualRecording();
-          }, 100);
-          return 0;
+      currentCount--;
+      setCountdown(currentCount);
+      console.log("Countdown:", currentCount);
+      
+      if (currentCount <= 0) {
+        if (countdownIntervalRef.current) {
+          clearInterval(countdownIntervalRef.current);
+          countdownIntervalRef.current = null;
         }
-        return prev - 1;
-      });
+        // Start actual recording immediately after countdown
+        startActualRecording();
+      }
     }, 1000);
   }, [startActualRecording]);
 
@@ -259,21 +386,32 @@ function CreatePage() {
       mediaRecorder.stop();
     }
 
-    // Stop video stream
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-    }
-
-    // Clear video elements
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
-
     // Only exit if we have a recorded video, otherwise reset everything
     if (recordedVideo && recordingState === "playback") {
       setRecordingState("idle");
-      // Keep the recorded video for normal mode
+      // Reinitialize camera for idle state
+      const reinitializeCamera = async () => {
+        try {
+          if (!streamRef.current) {
+            const constraints = {
+              video: {
+                width: { ideal: 1920 },
+                height: { ideal: 1080 },
+                deviceId: selectedCameraId ? { exact: selectedCameraId } : undefined,
+              },
+              audio: true,
+            };
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            streamRef.current = stream;
+            if (videoRef.current) {
+              videoRef.current.srcObject = stream;
+            }
+          }
+        } catch (error) {
+          console.error("Error reinitializing camera:", error);
+        }
+      };
+      reinitializeCamera();
     } else {
       // Reset everything if exiting during recording/countdown
       setRecordingState("idle");
@@ -281,8 +419,32 @@ function CreatePage() {
       setRecordedChunks([]);
       setRecordingTime(0);
       setCountdown(3);
+      
+      // Reinitialize camera
+      const reinitializeCamera = async () => {
+        try {
+          if (!streamRef.current) {
+            const constraints = {
+              video: {
+                width: { ideal: 1920 },
+                height: { ideal: 1080 },
+                deviceId: selectedCameraId ? { exact: selectedCameraId } : undefined,
+              },
+              audio: true,
+            };
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            streamRef.current = stream;
+            if (videoRef.current) {
+              videoRef.current.srcObject = stream;
+            }
+          }
+        } catch (error) {
+          console.error("Error reinitializing camera:", error);
+        }
+      };
+      reinitializeCamera();
     }
-  }, [recordedVideo, recordingState, mediaRecorder]);
+  }, [recordedVideo, recordingState, mediaRecorder, selectedCameraId]);
 
   const startRecording = useCallback(async () => {
     try {
@@ -305,18 +467,23 @@ function CreatePage() {
         recordingIntervalRef.current = null;
       }
 
-      // Get camera access
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
-        },
-        audio: true,
-      });
+      // Ensure we have camera access - reuse existing stream if available
+      if (!streamRef.current) {
+        const constraints = {
+          video: {
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+            deviceId: selectedCameraId ? { exact: selectedCameraId } : undefined,
+          },
+          audio: true,
+        };
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        streamRef.current = stream;
+      }
 
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
+      // Make sure video element has the stream
+      if (videoRef.current && streamRef.current) {
+        videoRef.current.srcObject = streamRef.current;
       }
 
       // Start countdown
@@ -325,7 +492,7 @@ function CreatePage() {
       console.error("Error accessing camera:", error);
       alert("Unable to access camera. Please check permissions.");
     }
-  }, [startCountdown]);
+  }, [startCountdown, selectedCameraId]);
 
   const handleSubmit = async () => {
     if (!recordedVideo) {
@@ -578,10 +745,31 @@ function CreatePage() {
                     Use This
                   </Button>
                   <Button
-                    onClick={() => {
+                    onClick={async () => {
                       setRecordedVideo(null);
                       setRecordedChunks([]);
                       setRecordingState("idle");
+                      // Reinitialize camera for new recording
+                      try {
+                        if (!streamRef.current) {
+                          const constraints = {
+                            video: {
+                              width: { ideal: 1920 },
+                              height: { ideal: 1080 },
+                              deviceId: selectedCameraId ? { exact: selectedCameraId } : undefined,
+                            },
+                            audio: true,
+                          };
+                          const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                          streamRef.current = stream;
+                          if (videoRef.current) {
+                            videoRef.current.srcObject = stream;
+                          }
+                        }
+                      } catch (error) {
+                        console.error("Error reinitializing camera:", error);
+                        alert("Unable to access camera. Please check permissions.");
+                      }
                     }}
                     variant="outline"
                     size="lg"
@@ -682,13 +870,99 @@ function CreatePage() {
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    muted
-                    playsInline
-                    className="w-full h-full object-cover"
-                  />
+                  <>
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      muted
+                      playsInline
+                      className="w-full h-full object-cover"
+                    />
+                    {/* Fallback message if camera is not available */}
+                    {!streamRef.current && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-2xl">
+                        <div className="text-center text-white">
+                          <Camera className="h-16 w-16 mx-auto mb-4 opacity-50" />
+                          <p className="text-lg mb-2">Camera not available</p>
+                          <p className="text-sm opacity-70">
+                            Please allow camera access to record your video
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Camera Selector - More Prominent */}
+                {availableCameras.length > 1 && !recordedVideo && (
+                  <div className="absolute top-4 left-4 right-4 flex justify-between items-start">
+                    <div className="flex items-center space-x-2 bg-black/50 backdrop-blur-sm rounded-lg px-3 py-2 text-white text-sm">
+                      <Camera className="h-4 w-4" />
+                      <span>
+                        {availableCameras.find(c => c.deviceId === selectedCameraId)?.label || 'Camera'}
+                      </span>
+                    </div>
+                    <div className="relative camera-selector">
+                      <Button
+                        onClick={() => setShowCameraSelector(!showCameraSelector)}
+                        variant="outline"
+                        size="sm"
+                        className="border-white/50 bg-black/50 text-white hover:bg-black/70 backdrop-blur-sm"
+                      >
+                        <Settings className="h-4 w-4 mr-2" />
+                        Switch Camera
+                        <ChevronDown className="h-4 w-4 ml-2" />
+                      </Button>
+                      
+                      {showCameraSelector && (
+                        <div className="absolute top-full right-0 mt-2 w-72 bg-white/95 backdrop-blur-sm rounded-lg shadow-xl border border-white/20 max-h-64 overflow-y-auto z-10">
+                          <div className="p-3 border-b border-gray-200 flex items-center justify-between">
+                            <div>
+                              <h3 className="font-medium text-[#030c03] text-sm">Select Camera</h3>
+                              <p className="text-xs text-[#030c03]/70 mt-1">Choose your preferred camera source</p>
+                            </div>
+                            <Button
+                              onClick={refreshCameras}
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 hover:bg-gray-100"
+                              title="Refresh cameras"
+                            >
+                              <RefreshCw className="h-4 w-4" />
+                            </Button>
+                          </div>
+                          {availableCameras.map((camera, index) => (
+                            <button
+                              key={camera.deviceId}
+                              onClick={() => switchCamera(camera.deviceId)}
+                              className={`w-full px-4 py-3 text-left hover:bg-black/10 transition-colors border-b border-gray-100 last:border-b-0 ${
+                                selectedCameraId === camera.deviceId
+                                  ? 'bg-[#3fd342]/20 text-[#030c03] font-medium'
+                                  : 'text-[#030c03]/80'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center">
+                                  <Camera className="h-4 w-4 mr-3" />
+                                  <div>
+                                    <div className="text-sm font-medium">
+                                      {camera.label || `Camera ${index + 1}`}
+                                    </div>
+                                    <div className="text-xs text-[#030c03]/60">
+                                      {camera.deviceId.slice(0, 20)}...
+                                    </div>
+                                  </div>
+                                </div>
+                                {selectedCameraId === camera.deviceId && (
+                                  <div className="w-2 h-2 bg-[#3fd342] rounded-full"></div>
+                                )}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 )}
 
                 {/* Start Recording Button */}
@@ -709,9 +983,30 @@ function CreatePage() {
                 {recordedVideo && (
                   <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2">
                     <Button
-                      onClick={() => {
+                      onClick={async () => {
                         setRecordedVideo(null);
                         setRecordedChunks([]);
+                        // Reinitialize camera for new recording
+                        try {
+                          if (!streamRef.current) {
+                            const constraints = {
+                              video: {
+                                width: { ideal: 1920 },
+                                height: { ideal: 1080 },
+                                deviceId: selectedCameraId ? { exact: selectedCameraId } : undefined,
+                              },
+                              audio: true,
+                            };
+                            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                            streamRef.current = stream;
+                            if (videoRef.current) {
+                              videoRef.current.srcObject = stream;
+                            }
+                          }
+                        } catch (error) {
+                          console.error("Error reinitializing camera:", error);
+                          alert("Unable to access camera. Please check permissions.");
+                        }
                       }}
                       size="lg"
                       variant="outline"
@@ -740,22 +1035,58 @@ function CreatePage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="flex-1">
-                  <div className="space-y-3">
-                    <Label
-                      htmlFor="description"
-                      className="text-[#030c03] font-medium"
-                    >
-                      Song Description
-                    </Label>
-                    <textarea
-                      id="description"
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                      placeholder="e.g., A happy summer day at the beach, upbeat pop with acoustic guitar, dreamy and nostalgic..."
-                      className="w-full h-80 bg-white/80 border border-[#8fd1e3]/40 rounded-lg p-4 text-[#030c03] placeholder:text-[#030c03]/50 focus:border-[#3fd342] focus:outline-none resize-none shadow-sm"
-                    />
-                    <div className="text-sm text-[#030c03]/50 text-right">
-                      {description.length}/500 characters
+                  <div className="space-y-4">
+                    {/* Camera Selection in Sidebar */}
+                    {availableCameras.length > 1 && !recordedVideo && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-[#030c03] font-medium flex items-center">
+                            <Camera className="h-4 w-4 mr-2" />
+                            Camera Source
+                          </Label>
+                          <Button
+                            onClick={refreshCameras}
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0 hover:bg-gray-100"
+                            title="Refresh cameras"
+                          >
+                            <RefreshCw className="h-3 w-3" />
+                          </Button>
+                        </div>
+                        <select
+                          value={selectedCameraId}
+                          onChange={(e) => switchCamera(e.target.value)}
+                          className="w-full bg-white/80 border border-[#8fd1e3]/40 rounded-lg p-3 text-[#030c03] focus:border-[#3fd342] focus:outline-none shadow-sm"
+                        >
+                          {availableCameras.map((camera, index) => (
+                            <option key={camera.deviceId} value={camera.deviceId}>
+                              {camera.label || `Camera ${index + 1}`}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                    
+                    <div className="space-y-3">
+                      <Label
+                        htmlFor="description"
+                        className="text-[#030c03] font-medium"
+                      >
+                        Song Description
+                      </Label>
+                      <textarea
+                        id="description"
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        placeholder="e.g., A happy summer day at the beach, upbeat pop with acoustic guitar, dreamy and nostalgic..."
+                        className={`w-full bg-white/80 border border-[#8fd1e3]/40 rounded-lg p-4 text-[#030c03] placeholder:text-[#030c03]/50 focus:border-[#3fd342] focus:outline-none resize-none shadow-sm ${
+                          availableCameras.length > 1 && !recordedVideo ? 'h-64' : 'h-80'
+                        }`}
+                      />
+                      <div className="text-sm text-[#030c03]/50 text-right">
+                        {description.length}/500 characters
+                      </div>
                     </div>
                   </div>
                 </CardContent>
