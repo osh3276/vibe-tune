@@ -4,11 +4,11 @@ import { createClient } from "@/lib/supabase/server";
 // GET: Fetch a specific song by id
 export async function GET(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const supabase = await createClient();
   const { id: songId } = await params;
-  
+
   if (!songId) {
     return NextResponse.json({ error: "Missing song id" }, { status: 400 });
   }
@@ -21,23 +21,23 @@ export async function GET(
 
   if (error) {
     console.error("Supabase error:", error);
-    if (error.code === 'PGRST116') {
+    if (error.code === "PGRST116") {
       return NextResponse.json({ error: "Song not found" }, { status: 404 });
     }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  
+
   return NextResponse.json(data);
 }
 
 // PUT: Update a song's metadata (title, description)
 export async function PUT(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const supabase = await createClient();
   const { id: songId } = await params;
-  
+
   if (!songId) {
     return NextResponse.json({ error: "Missing song id" }, { status: 400 });
   }
@@ -68,7 +68,7 @@ export async function PUT(
 
     if (error) {
       console.error("Supabase update error:", error);
-      if (error.code === 'PGRST116') {
+      if (error.code === "PGRST116") {
         return NextResponse.json({ error: "Song not found" }, { status: 404 });
       }
       return NextResponse.json({ error: error.message }, { status: 500 });
@@ -77,26 +77,26 @@ export async function PUT(
     return NextResponse.json(data);
   } catch (error) {
     console.error("Error parsing request body:", error);
-    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid request body" },
+      { status: 400 },
+    );
   }
 }
 
 // DELETE: Delete a song by id
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const supabase = await createClient();
   const { id: songId } = await params;
-  
+
   if (!songId) {
     return NextResponse.json({ error: "Missing song id" }, { status: 400 });
   }
 
-  const { error } = await supabase
-    .from("songs")
-    .delete()
-    .eq("id", songId);
+  const { error } = await supabase.from("songs").delete().eq("id", songId);
 
   if (error) {
     console.error("Supabase delete error:", error);

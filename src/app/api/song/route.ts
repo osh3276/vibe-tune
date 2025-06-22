@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 // GET: List all songs (id, title, user_id)
 export async function GET() {
   const supabase = await createClient();
-  
+
   const { data, error } = await supabase
     .from("songs")
     .select("id, title, user_id, created_at, status, description")
@@ -22,10 +22,19 @@ export async function POST(req: NextRequest) {
   try {
     const supabase = await createClient();
     const body = await req.json();
-    const { title, description, user_id, parameters, status = "processing" } = body;
+    const {
+      title,
+      description,
+      user_id,
+      parameters,
+      status = "processing",
+    } = body;
 
     if (!title || !user_id) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Missing required fields" },
+        { status: 400 },
+      );
     }
 
     const { data, error } = await supabase
@@ -49,7 +58,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(data, { status: 201 });
   } catch (error) {
     console.error("API error:", error);
-    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid request body" },
+      { status: 400 },
+    );
   }
 }
 
@@ -82,6 +94,9 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json(data);
   } catch (error) {
     console.error("API error:", error);
-    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid request body" },
+      { status: 400 },
+    );
   }
 }
