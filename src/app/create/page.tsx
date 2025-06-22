@@ -12,7 +12,7 @@ import { Music, Video, Camera, Mic, ArrowLeft, Play, Square, X, Sparkles } from 
 
 function CreatePage() {
 	// Recording states
-	const [recordingState, setRecordingState] = useState<'idle' | 'countdown' | 'recording' | 'playback'>('idle');
+	const [recordingState, setRecordingState] = useState<"idle" | "countdown" | "recording" | "playback">("idle");
 	const [recordedVideo, setRecordedVideo] = useState<string | null>(null);
 	const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
 	const [recordedChunks, setRecordedChunks] = useState<Blob[]>([]);
@@ -52,11 +52,11 @@ function CreatePage() {
 
 	// Handle playback video loading
 	useEffect(() => {
-		if (recordingState === 'playback' && recordedVideo && playbackVideoRef.current) {
+		if (recordingState === "playback" && recordedVideo && playbackVideoRef.current) {
 			const video = playbackVideoRef.current;
 			video.src = recordedVideo;
 			video.load();
-			
+
 			// Try to play the video
 			video.play().catch((error) => {
 				console.warn("Auto-play failed:", error);
@@ -77,12 +77,7 @@ function CreatePage() {
 
 		// Detect best mimeType for browser compatibility
 		function getSupportedMimeType() {
-			const possibleTypes = [
-				"video/webm;codecs=vp9,opus",
-				"video/webm;codecs=vp8,opus",
-				"video/webm",
-				"video/mp4",
-			];
+			const possibleTypes = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm", "video/mp4"];
 			for (const type of possibleTypes) {
 				if (MediaRecorder.isTypeSupported(type)) {
 					return type;
@@ -110,57 +105,57 @@ function CreatePage() {
 
 		recorder.onstop = () => {
 			console.log("Recording stopped, chunks:", chunksRef.current.length);
-			
+
 			// Clear the recording timer FIRST
 			if (recordingIntervalRef.current) {
 				clearInterval(recordingIntervalRef.current);
 				recordingIntervalRef.current = null;
 			}
-			
+
 			const blob = new Blob(chunksRef.current, { type: mimeType });
 			const url = URL.createObjectURL(blob);
 			console.log("Created URL:", url);
-			
+
 			// Stop the live stream
 			if (streamRef.current) {
 				streamRef.current.getTracks().forEach((track) => track.stop());
 				streamRef.current = null;
 			}
-			
+
 			// Clear the live video element
 			if (videoRef.current) {
 				videoRef.current.srcObject = null;
 			}
-			
+
 			// Set the recorded video and switch to playback
 			setRecordedVideo(url);
-			setRecordingState('playback');
+			setRecordingState("playback");
 		};
 
 		mediaRecorderRef.current = recorder;
 		setMediaRecorder(recorder);
 		recorder.start();
-		setRecordingState('recording');
+		setRecordingState("recording");
 		setRecordingTime(0);
 
 		console.log("Starting recording timer...");
-		
+
 		// Clear any existing recording timer before starting a new one
 		if (recordingIntervalRef.current) {
 			clearInterval(recordingIntervalRef.current);
 			recordingIntervalRef.current = null;
 		}
-		
+
 		// Start recording timer with fresh ref
 		recordingIntervalRef.current = setInterval(() => {
 			setRecordingTime((prevTime) => {
 				const newTime = prevTime + 1;
 				console.log("Timer tick:", newTime, "seconds");
-				
+
 				// Auto-stop at max time
 				if (newTime >= 30) {
 					console.log("Max recording time reached, stopping...");
-					if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+					if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
 						mediaRecorderRef.current.stop();
 					}
 					return 30;
@@ -172,9 +167,9 @@ function CreatePage() {
 
 	const startCountdown = useCallback(() => {
 		console.log("Starting countdown...");
-		setRecordingState('countdown');
+		setRecordingState("countdown");
 		setCountdown(3);
-		
+
 		countdownIntervalRef.current = setInterval(() => {
 			setCountdown((prev) => {
 				console.log("Countdown:", prev);
@@ -196,15 +191,15 @@ function CreatePage() {
 
 	const stopRecording = useCallback(() => {
 		console.log("Stop recording called");
-		
+
 		// Clear recording timer first
 		if (recordingIntervalRef.current) {
 			clearInterval(recordingIntervalRef.current);
 			recordingIntervalRef.current = null;
 		}
-		
+
 		// Stop the media recorder
-		if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+		if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
 			console.log("Stopping MediaRecorder...");
 			mediaRecorderRef.current.stop();
 		}
@@ -212,7 +207,7 @@ function CreatePage() {
 
 	const exitTheatreMode = useCallback(() => {
 		console.log("Exiting theatre mode, current state:", recordingState);
-		
+
 		// Clear any running intervals first
 		if (countdownIntervalRef.current) {
 			clearInterval(countdownIntervalRef.current);
@@ -222,30 +217,30 @@ function CreatePage() {
 			clearInterval(recordingIntervalRef.current);
 			recordingIntervalRef.current = null;
 		}
-		
+
 		// Stop any ongoing recording
-		if (mediaRecorder && recordingState === 'recording') {
+		if (mediaRecorder && recordingState === "recording") {
 			mediaRecorder.stop();
 		}
-		
+
 		// Stop video stream
 		if (streamRef.current) {
 			streamRef.current.getTracks().forEach((track) => track.stop());
 			streamRef.current = null;
 		}
-		
+
 		// Clear video elements
 		if (videoRef.current) {
 			videoRef.current.srcObject = null;
 		}
-		
+
 		// Only exit if we have a recorded video, otherwise reset everything
-		if (recordedVideo && recordingState === 'playback') {
-			setRecordingState('idle');
+		if (recordedVideo && recordingState === "playback") {
+			setRecordingState("idle");
 			// Keep the recorded video for normal mode
 		} else {
 			// Reset everything if exiting during recording/countdown
-			setRecordingState('idle');
+			setRecordingState("idle");
 			setRecordedVideo(null);
 			setRecordedChunks([]);
 			setRecordingTime(0);
@@ -256,14 +251,14 @@ function CreatePage() {
 	const startRecording = useCallback(async () => {
 		try {
 			console.log("Starting recording process...");
-			
+
 			// Reset all recording states first
 			setRecordedVideo(null);
 			setRecordedChunks([]);
 			setRecordingTime(0);
 			setCountdown(3);
 			chunksRef.current = [];
-			
+
 			// Clear any existing intervals
 			if (countdownIntervalRef.current) {
 				clearInterval(countdownIntervalRef.current);
@@ -290,7 +285,6 @@ function CreatePage() {
 
 			// Start countdown
 			startCountdown();
-
 		} catch (error) {
 			console.error("Error accessing camera:", error);
 			alert("Unable to access camera. Please check permissions.");
@@ -305,12 +299,62 @@ function CreatePage() {
 
 		setIsGenerating(true);
 
-		// Simulate API call
-		setTimeout(() => {
+		try {
+			// Convert video URL back to blob
+			const response = await fetch(recordedVideo);
+			const videoBlob = await response.blob();
+
+			// Convert video blob to base64
+			const videoBase64 = await videoBlobToBase64(videoBlob);
+
+			// Call the song generation API
+			const apiResponse = await fetch("/api/generate-song", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					videoBase64,
+					userText: description,
+					title: "My Generated Song",
+				}),
+			});
+
+			if (!apiResponse.ok) {
+				const errorData = await apiResponse.json();
+				throw new Error(errorData.error || "Failed to generate song");
+			}
+
+			const result = await apiResponse.json();
+
+			// Show success message
+			alert(`🎉 Song generated successfully!\n\nSong ID: ${result.songId}\nDuration: ${Math.round(result.duration)}s\n\nCheck the console for detailed logs.`);
+
+			// Reset the form
+			setRecordedVideo(null);
+			setRecordedChunks([]);
+			setDescription("");
+		} catch (error) {
+			console.error("Song generation error:", error);
+			alert(error instanceof Error ? error.message : "Failed to generate song. Please try again.");
+		} finally {
 			setIsGenerating(false);
-			// Redirect to song view page
-			window.location.href = "/song/123";
-		}, 3000);
+		}
+	};
+
+	// Utility function to convert video blob to base64
+	const videoBlobToBase64 = (blob: Blob): Promise<string> => {
+		return new Promise((resolve, reject) => {
+			const reader = new FileReader();
+			reader.onload = () => {
+				const result = reader.result as string;
+				// Remove the data URL prefix (e.g., "data:video/mp4;base64,")
+				const base64 = result.split(",")[1];
+				resolve(base64);
+			};
+			reader.onerror = reject;
+			reader.readAsDataURL(blob);
+		});
 	};
 
 	// Calculate progress percentage for recording (ensure it doesn't exceed 100%)
@@ -329,15 +373,14 @@ function CreatePage() {
 					<span className="text-2xl font-bold text-[#030c03]">VibeTune</span>
 				</div>
 			</nav>
-
 			{/* Theatre Mode Overlay */}
-			{(recordingState !== 'idle') && (
+			{recordingState !== "idle" && (
 				<div className="fixed inset-0 bg-black/95 z-50 flex">
 					{/* Main Theatre Content */}
 					<div className="flex-1 flex items-center justify-center relative">
 						{/* Video Display */}
 						<div className="relative w-full max-w-6xl aspect-video">
-							{recordingState === 'playback' && recordedVideo ? (
+							{recordingState === "playback" && recordedVideo ? (
 								<video
 									ref={playbackVideoRef}
 									src={recordedVideo}
@@ -353,35 +396,24 @@ function CreatePage() {
 									}}
 								/>
 							) : (
-								<video
-									ref={videoRef}
-									autoPlay
-									muted
-									playsInline
-									className="w-full h-full object-cover rounded-lg"
-								/>
+								<video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover rounded-lg" />
 							)}
 
 							{/* Countdown Overlay */}
-							{recordingState === 'countdown' && (
+							{recordingState === "countdown" && (
 								<div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-lg">
-									<div className="text-white text-8xl font-bold animate-pulse">
-										{countdown}
-									</div>
+									<div className="text-white text-8xl font-bold animate-pulse">{countdown}</div>
 								</div>
 							)}
 
 							{/* Recording Progress Bar */}
-							{recordingState === 'recording' && (
+							{recordingState === "recording" && (
 								<>
 									{/* Progress Bar at Top */}
 									<div className="absolute top-6 left-6 right-6 bg-black/30 rounded-full h-1">
-										<div
-											className="bg-red-500 h-full rounded-full transition-all duration-100"
-											style={{ width: `${recordingProgress}%` }}
-										/>
+										<div className="bg-red-500 h-full rounded-full transition-all duration-100" style={{ width: `${recordingProgress}%` }} />
 									</div>
-									
+
 									{/* Recording Indicator - Minimal */}
 									<div className="absolute top-8 right-8 flex items-center space-x-2 bg-red-500/90 backdrop-blur-sm text-white px-3 py-1.5 rounded-full">
 										<div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
@@ -392,11 +424,7 @@ function CreatePage() {
 
 									{/* Stop Recording Button - Icon Only */}
 									<div className="absolute bottom-8 right-8">
-										<Button
-											onClick={stopRecording}
-											size="lg"
-											className="bg-red-500/90 hover:bg-red-600 backdrop-blur-sm text-white p-4 rounded-full shadow-lg border-2 border-white/20"
-										>
+										<Button onClick={stopRecording} size="lg" className="bg-red-500/90 hover:bg-red-600 backdrop-blur-sm text-white p-4 rounded-full shadow-lg border-2 border-white/20">
 											<Square className="h-6 w-6" fill="currentColor" />
 										</Button>
 									</div>
@@ -405,24 +433,15 @@ function CreatePage() {
 
 							{/* Exit Theatre Mode Button */}
 							<div className="absolute top-8 left-8">
-								<Button
-									onClick={exitTheatreMode}
-									variant="ghost"
-									size="lg"
-									className="bg-black/50 hover:bg-black/70 backdrop-blur-sm text-white rounded-full p-3 border border-white/20"
-								>
+								<Button onClick={exitTheatreMode} variant="ghost" size="lg" className="bg-black/50 hover:bg-black/70 backdrop-blur-sm text-white rounded-full p-3 border border-white/20">
 									<X className="h-5 w-5" />
 								</Button>
 							</div>
 
 							{/* Playback Controls */}
-							{recordingState === 'playback' && (
+							{recordingState === "playback" && (
 								<div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 flex space-x-4">
-									<Button
-										onClick={exitTheatreMode}
-										size="lg"
-										className="bg-[#3fd342]/90 hover:bg-[#3fd342] backdrop-blur-sm text-[#030c03] px-6 py-3 rounded-full shadow-lg font-medium"
-									>
+									<Button onClick={exitTheatreMode} size="lg" className="bg-[#3fd342]/90 hover:bg-[#3fd342] backdrop-blur-sm text-[#030c03] px-6 py-3 rounded-full shadow-lg font-medium">
 										<Play className="h-5 w-5 mr-2" />
 										Use This
 									</Button>
@@ -430,7 +449,7 @@ function CreatePage() {
 										onClick={() => {
 											setRecordedVideo(null);
 											setRecordedChunks([]);
-											setRecordingState('idle');
+											setRecordingState("idle");
 										}}
 										variant="outline"
 										size="lg"
@@ -453,39 +472,24 @@ function CreatePage() {
 										<Mic className="h-6 w-6 mr-3 text-[#3fd342]" />
 										Add Context
 									</CardTitle>
-									<CardDescription className="text-white/70">
-										Describe the mood, style, or story you want in your song
-									</CardDescription>
+									<CardDescription className="text-white/70">Describe the mood, style, or story you want in your song</CardDescription>
 								</CardHeader>
 								<CardContent className="flex-1">
 									<div className="space-y-3">
 										<Label htmlFor="description-theatre" className="text-white font-medium">
 											Song Description
 										</Label>
-										<textarea
-											id="description-theatre"
-											value={description}
-											onChange={(e) => setDescription(e.target.value)}
-											placeholder="e.g., A happy summer day at the beach, upbeat pop with acoustic guitar, dreamy and nostalgic..."
-											className="w-full h-80 bg-white/10 border border-white/30 rounded-lg p-4 text-white placeholder:text-white/50 focus:border-[#3fd342] focus:outline-none resize-none"
-										/>
-										<div className="text-sm text-white/50 text-right">
-											{description.length}/500 characters
-										</div>
+										<textarea id="description-theatre" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g., A happy summer day at the beach, upbeat pop with acoustic guitar, dreamy and nostalgic..." className="w-full h-80 bg-white/10 border border-white/30 rounded-lg p-4 text-white placeholder:text-white/50 focus:border-[#3fd342] focus:outline-none resize-none" />
+										<div className="text-sm text-white/50 text-right">{description.length}/500 characters</div>
 									</div>
 								</CardContent>
 							</Card>
 						</div>
 
 						{/* Generate Button in Theatre Mode */}
-						{recordingState === 'playback' && (
+						{recordingState === "playback" && (
 							<div className="mt-6">
-								<Button
-									onClick={handleSubmit}
-									disabled={!recordedVideo || isGenerating}
-									size="lg"
-									className="w-full bg-gradient-to-r from-[#3fd342] to-[#668bd9] hover:from-[#3fd342]/80 hover:to-[#668bd9]/80 text-white py-4 text-lg font-medium shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-								>
+								<Button onClick={handleSubmit} disabled={!recordedVideo || isGenerating} size="lg" className="w-full bg-gradient-to-r from-[#3fd342] to-[#668bd9] hover:from-[#3fd342]/80 hover:to-[#668bd9]/80 text-white py-4 text-lg font-medium shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
 									{isGenerating ? (
 										<>
 											<Sparkles className="h-6 w-6 mr-3 animate-spin" />
@@ -502,8 +506,9 @@ function CreatePage() {
 						)}
 					</div>
 				</div>
-			)}							{/* Normal Mode Layout */}
-			{recordingState === 'idle' && (
+			)}{" "}
+			{/* Normal Mode Layout */}
+			{recordingState === "idle" && (
 				<div className="flex h-[calc(100vh-88px)]">
 					{/* Main Camera Section */}
 					<div className="flex-1 p-6 flex flex-col">
@@ -515,30 +520,12 @@ function CreatePage() {
 						{/* Large Camera/Video Display */}
 						<div className="flex-1 flex items-center justify-center">
 							<div className="relative w-full max-w-4xl aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl">
-								{recordedVideo ? (
-									<video
-										src={recordedVideo}
-										controls
-										className="w-full h-full object-cover"
-									/>
-								) : (
-									<video
-										ref={videoRef}
-										autoPlay
-										muted
-										playsInline
-										className="w-full h-full object-cover"
-									/>
-								)}
+								{recordedVideo ? <video src={recordedVideo} controls className="w-full h-full object-cover" /> : <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover" />}
 
 								{/* Start Recording Button */}
 								{!recordedVideo && (
 									<div className="absolute bottom-8 left-1/2 transform -translate-x-1/2">
-										<Button
-											onClick={startRecording}
-											size="lg"
-											className="bg-[#3fd342] hover:bg-[#3fd342]/80 text-[#030c03] px-8 py-4 text-lg shadow-lg rounded-full"
-										>
+										<Button onClick={startRecording} size="lg" className="bg-[#3fd342] hover:bg-[#3fd342]/80 text-[#030c03] px-8 py-4 text-lg shadow-lg rounded-full">
 											<Video className="h-6 w-6 mr-3" />
 											Start Recording
 										</Button>
@@ -575,25 +562,15 @@ function CreatePage() {
 										<Mic className="h-6 w-6 mr-3 text-[#3fd342]" />
 										Add Context
 									</CardTitle>
-									<CardDescription className="text-[#030c03]/70">
-										Describe the mood, style, or story you want in your song
-									</CardDescription>
+									<CardDescription className="text-[#030c03]/70">Describe the mood, style, or story you want in your song</CardDescription>
 								</CardHeader>
 								<CardContent className="flex-1">
 									<div className="space-y-3">
 										<Label htmlFor="description" className="text-[#030c03] font-medium">
 											Song Description
 										</Label>
-										<textarea
-											id="description"
-											value={description}
-											onChange={(e) => setDescription(e.target.value)}
-											placeholder="e.g., A happy summer day at the beach, upbeat pop with acoustic guitar, dreamy and nostalgic..."
-											className="w-full h-80 bg-white/80 border border-[#8fd1e3]/40 rounded-lg p-4 text-[#030c03] placeholder:text-[#030c03]/50 focus:border-[#3fd342] focus:outline-none resize-none shadow-sm"
-										/>
-										<div className="text-sm text-[#030c03]/50 text-right">
-											{description.length}/500 characters
-										</div>
+										<textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g., A happy summer day at the beach, upbeat pop with acoustic guitar, dreamy and nostalgic..." className="w-full h-80 bg-white/80 border border-[#8fd1e3]/40 rounded-lg p-4 text-[#030c03] placeholder:text-[#030c03]/50 focus:border-[#3fd342] focus:outline-none resize-none shadow-sm" />
+										<div className="text-sm text-[#030c03]/50 text-right">{description.length}/500 characters</div>
 									</div>
 								</CardContent>
 							</Card>
@@ -602,12 +579,7 @@ function CreatePage() {
 						{/* Generate Button */}
 						{recordedVideo && (
 							<div className="mt-6">
-								<Button
-									onClick={handleSubmit}
-									disabled={!recordedVideo || isGenerating}
-									size="lg"
-									className="w-full bg-gradient-to-r from-[#3fd342] to-[#668bd9] hover:from-[#3fd342]/80 hover:to-[#668bd9]/80 text-white py-4 text-lg font-medium shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-								>
+								<Button onClick={handleSubmit} disabled={!recordedVideo || isGenerating} size="lg" className="w-full bg-gradient-to-r from-[#3fd342] to-[#668bd9] hover:from-[#3fd342]/80 hover:to-[#668bd9]/80 text-white py-4 text-lg font-medium shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
 									{isGenerating ? (
 										<>
 											<Sparkles className="h-6 w-6 mr-3 animate-spin" />
@@ -621,9 +593,7 @@ function CreatePage() {
 									)}
 								</Button>
 
-								<p className="text-[#030c03]/60 text-sm text-center mt-3">
-									Ready to create your unique song!
-								</p>
+								<p className="text-[#030c03]/60 text-sm text-center mt-3">Ready to create your unique song!</p>
 							</div>
 						)}
 					</div>
