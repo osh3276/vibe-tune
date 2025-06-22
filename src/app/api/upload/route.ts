@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { writeFile, mkdir } from "fs/promises";
+import { existsSync } from "fs";
+import path from "path";
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,42 +17,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No song ID provided" }, { status: 400 });
     }
 
-    const supabase = await createClient();
-    
-    // Convert file to array buffer
     const bytes = await file.arrayBuffer();
-    
-    // Generate filename
-    const filename = `${songId}.wav`;
-    const filePath = `songs/${filename}`;
+    const buffer = Buffer.from(bytes);
 
-    // Upload to Supabase Storage
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from('songs')
-      .upload(filePath, bytes, {
-        contentType: 'audio/wav',
-        upsert: true // Allow overwriting existing files
-      });
-
-    if (uploadError) {
-      console.error("Supabase Storage upload error:", uploadError);
-      return NextResponse.json(
-        { error: `Failed to upload to storage: ${uploadError.message}` },
-        { status: 500 }
-      );
+    // Create uploads directory if it doesn't exist
+    const uploadsDir = path.join(process.cwd(), "public", "uploads", "songs");
+    if (!existsSync(uploadsDir)) {
+      await mkdir(uploadsDir, { recursive: true });
     }
 
-    // Get the public URL for the uploaded file
-    const { data: publicUrlData } = supabase.storage
-      .from('songs')
-      .getPublicUrl(filePath);
+    // Generate filename
+    const filename = `${songId}.wav`;
+    const filepath = path.join(uploadsDir, filename);
 
-    const fileUrl = publicUrlData.publicUrl;
+    // Write file
+    await writeFile(filepath, buffer);
+
+    // Return the public URL
+    const fileUrl = `/uploads/songs/${filename}`;
 
     return NextResponse.json({ 
       success: true, 
-      fileUrl,
-      path: uploadData.path
+      fileUrl 
     });
 
   } catch (error) {

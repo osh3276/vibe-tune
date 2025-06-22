@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
 		// const videoBuffer = Buffer.from(await videoFile.arrayBuffer());
 		// If you want to use Gemini, you can call:
 		const geminiPrompt = await processVideoWithGemini(videoFile, userText);
-		console.log('Raw Gemini prompt (going straight to Lyria):', geminiPrompt);
+		console.log('Gemini prompt:', geminiPrompt);
 
 		// Prepare payload for Google Cloud AI model
 		const payload = {
