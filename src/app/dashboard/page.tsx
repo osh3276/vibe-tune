@@ -2,7 +2,7 @@
 
 import { useAuth } from "@/lib/auth";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -31,86 +31,18 @@ import {
   TrendingUp,
   Clock,
   Play,
-  MoreHorizontal,
-  AlertCircle,
-  Trash2,
 } from "lucide-react";
 import Link from "next/link";
-
-interface Song {
-  id: string;
-  title: string;
-  description?: string;
-  status: "processing" | "completed" | "failed";
-  created_at: string;
-  user_id: string;
-}
 
 export default function DashboardPage() {
   const { user, loading, signOut } = useAuth();
   const router = useRouter();
-  const [songs, setSongs] = useState<Song[]>([]);
-  const [loadingSongs, setLoadingSongs] = useState(true);
 
   useEffect(() => {
     if (!loading && !user) {
       router.push("/login");
     }
   }, [user, loading, router]);
-
-  useEffect(() => {
-    if (user) {
-      fetchUserSongs();
-    }
-  }, [user]);
-
-  // Separate effect for polling
-  useEffect(() => {
-    const hasProcessingSongs = songs.some(song => song.status === "processing");
-    if (hasProcessingSongs && user) {
-      const interval = setInterval(fetchUserSongs, 5000); // Poll every 5 seconds
-      return () => clearInterval(interval);
-    }
-  }, [songs, user]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const fetchUserSongs = async () => {
-    try {
-      setLoadingSongs(true);
-      const response = await fetch("/api/song");
-      if (response.ok) {
-        const allSongs = await response.json();
-        // Filter songs for current user (RLS should handle this, but double-check)
-        const userSongs = allSongs.filter((song: Song) => song.user_id === user?.id);
-        setSongs(userSongs);
-      }
-    } catch (error) {
-      console.error("Error fetching songs:", error);
-    } finally {
-      setLoadingSongs(false);
-    }
-  };
-
-  const handleDeleteSong = async (songId: string, songTitle: string) => {
-    if (!confirm(`Are you sure you want to delete "${songTitle}"? This action cannot be undone.`)) {
-      return;
-    }
-
-    try {
-      const response = await fetch(`/api/song/${songId}`, {
-        method: "DELETE",
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to delete song");
-      }
-
-      // Remove the song from the local state
-      setSongs(songs.filter(song => song.id !== songId));
-    } catch (err) {
-      console.error("Error deleting song:", err);
-      alert("Failed to delete song");
-    }
-  };
 
   if (loading) {
     return (
@@ -128,40 +60,6 @@ export default function DashboardPage() {
   if (!user) {
     return null; // Will redirect in useEffect
   }
-
-  const completedSongs = songs.filter(song => song.status === "completed").length;
-  const processingSongs = songs.filter(song => song.status === "processing").length;
-  const thisMonthSongs = songs.filter(song => {
-    const songDate = new Date(song.created_at);
-    const now = new Date();
-    return songDate.getMonth() === now.getMonth() && songDate.getFullYear() === now.getFullYear();
-  }).length;
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "completed":
-        return "text-green-600 bg-green-100";
-      case "processing":
-        return "text-yellow-600 bg-yellow-100";
-      case "failed":
-        return "text-red-600 bg-red-100";
-      default:
-        return "text-gray-600 bg-gray-100";
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "completed":
-        return "✓";
-      case "processing":
-        return "⏳";
-      case "failed":
-        return "✗";
-      default:
-        return "?";
-    }
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#f9f9f7] to-[#f4f3ef] animate-in fade-in duration-500">
@@ -259,7 +157,7 @@ export default function DashboardPage() {
                   <p className="text-[#3fd342] text-sm font-medium">
                     Total Songs
                   </p>
-                  <p className="text-3xl font-bold text-[#030c03]">{songs.length}</p>
+                  <p className="text-3xl font-bold text-[#030c03]">0</p>
                 </div>
                 <div className="w-12 h-12 bg-[#3fd342]/20 rounded-lg flex items-center justify-center">
                   <Music className="h-6 w-6 text-[#3fd342]" />
@@ -275,7 +173,7 @@ export default function DashboardPage() {
                   <p className="text-[#668bd9] text-sm font-medium">
                     This Month
                   </p>
-                  <p className="text-3xl font-bold text-[#030c03]">{thisMonthSongs}</p>
+                  <p className="text-3xl font-bold text-[#030c03]">0</p>
                 </div>
                 <div className="w-12 h-12 bg-[#668bd9]/20 rounded-lg flex items-center justify-center">
                   <TrendingUp className="h-6 w-6 text-[#668bd9]" />
@@ -291,7 +189,7 @@ export default function DashboardPage() {
                   <p className="text-[#8fd1e3] text-sm font-medium">
                     Processing
                   </p>
-                  <p className="text-3xl font-bold text-[#030c03]">{processingSongs}</p>
+                  <p className="text-3xl font-bold text-[#030c03]">0</p>
                 </div>
                 <div className="w-12 h-12 bg-[#8fd1e3]/20 rounded-lg flex items-center justify-center">
                   <Clock className="h-6 w-6 text-[#8fd1e3]" />
@@ -337,7 +235,7 @@ export default function DashboardPage() {
                   <div>
                     <CardTitle className="text-2xl text-[#030c03] flex items-center">
                       <Zap className="h-6 w-6 text-[#668bd9] mr-3" />
-                      Your Songs
+                      Recent Activity
                     </CardTitle>
                     <CardDescription className="text-[#030c03]/60 text-base mt-2">
                       Your latest creations and projects
@@ -346,113 +244,18 @@ export default function DashboardPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                {loadingSongs ? (
-                  <div className="text-center py-8">
-                    <div className="w-8 h-8 border-4 border-[#3fd342] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                    <p className="text-[#030c03]/60">Loading songs...</p>
+                <div className="text-center py-16">
+                  <div className="w-20 h-20 bg-[#8fd1e3]/20 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <Music className="h-10 w-10 text-[#8fd1e3]" />
                   </div>
-                ) : songs.length === 0 ? (
-                  <div className="text-center py-16">
-                    <div className="w-20 h-20 bg-[#8fd1e3]/20 rounded-full flex items-center justify-center mx-auto mb-6">
-                      <Music className="h-10 w-10 text-[#8fd1e3]" />
-                    </div>
-                    <h3 className="text-xl font-semibold text-[#030c03] mb-2">
-                      Ready to create your first song?
-                    </h3>
-                    <p className="text-[#030c03]/60 mb-6 max-w-md mx-auto">
-                      Upload a video and watch as AI transforms it into an
-                      incredible musical experience.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-4 max-h-96 overflow-y-auto">
-                    {songs.slice(0, 6).map((song) => (
-                      <div
-                        key={song.id}
-                        className="flex items-center justify-between p-4 bg-white/50 rounded-lg border border-[#8fd1e3]/20 hover:border-[#3fd342]/30 transition-all group cursor-pointer"
-                        onClick={() => router.push(`/song/${song.id}`)}
-                      >
-                        <div className="flex items-center space-x-4">
-                          <div className="w-12 h-12 bg-gradient-to-br from-[#3fd342] to-[#668bd9] rounded-lg flex items-center justify-center flex-shrink-0">
-                            <Music className="h-6 w-6 text-white" />
-                          </div>
-                          <div>
-                            <h4 className="font-semibold text-[#030c03] group-hover:text-[#3fd342] transition-colors">
-                              {song.title}
-                            </h4>
-                            <div className="flex items-center space-x-2 mt-1">
-                              <span
-                                className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(
-                                  song.status
-                                )}`}
-                              >
-                                {getStatusIcon(song.status)} {song.status}
-                              </span>
-                              <span className="text-[#030c03]/60 text-sm">
-                                {new Date(song.created_at).toLocaleDateString()}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          {song.status === "completed" && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="w-8 h-8 opacity-0 group-hover:opacity-100 transition-opacity"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                router.push(`/song/${song.id}`);
-                              }}
-                            >
-                              <Play className="h-4 w-4" />
-                            </Button>
-                          )}
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="w-8 h-8 opacity-0 group-hover:opacity-100 transition-opacity"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  router.push(`/song/${song.id}`);
-                                }}
-                              >
-                                <Play className="h-4 w-4 mr-2" />
-                                View Song
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDeleteSong(song.id, song.title);
-                                }}
-                                className="text-red-600 hover:text-red-700 hover:bg-red-50 cursor-pointer"
-                              >
-                                <Trash2 className="h-4 w-4 mr-2" />
-                                Delete Song
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </div>
-                    ))}
-                    {songs.length > 6 && (
-                      <div className="text-center pt-4">
-                        <Button variant="outline" size="sm">
-                          View All Songs ({songs.length})
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                )}
+                  <h3 className="text-xl font-semibold text-[#030c03] mb-2">
+                    Ready to create your first song?
+                  </h3>
+                  <p className="text-[#030c03]/60 mb-6 max-w-md mx-auto">
+                    Upload a video and watch as AI transforms it into an
+                    incredible musical experience.
+                  </p>
+                </div>
               </CardContent>
             </Card>
           </div>
