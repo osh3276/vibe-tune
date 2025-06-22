@@ -394,11 +394,15 @@ export default function Home() {
 					>
 						<div className="flex justify-between items-center max-w-5xl mx-auto">
 							<div className="flex items-center space-x-3">
-								<Music className="h-6 w-6 text-[#3fd342]" />
-								{/* <Music className="h-6 w-6 text-[#3fd342]" /> */}
-								<span className="text-xl font-bold text-[#030c03]">
-									Vibe Tune
-								</span>
+								<div className="w-10 h-10 bg-[#3fd342] rounded-lg flex items-center justify-center">
+									<Music className="h-6 w-6 text-[#030c03]" />
+								</div>
+								<div className="flex items-center">
+									<span className="text-2xl font-inter font-semibold">Vibe{"  "}</span>
+									<span className="text-2xl font-semibold font-inter bg-gradient-to-r from-[#3fd342] to-[#668bd9] bg-clip-text text-transparent">
+										Tune
+									</span>
+								</div>
 							</div>
 							<div className="flex items-center space-x-4">
 								<Link href="/login">
