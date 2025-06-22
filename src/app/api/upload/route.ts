@@ -53,7 +53,6 @@ export async function POST(request: NextRequest) {
       .from("songs")
       .update({
         wav_data: buffer,
-        file_url: fileUrl,
         created_at: new Date().toISOString(),
         title,
         email,

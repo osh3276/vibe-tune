@@ -371,29 +371,27 @@ function CreatePage() {
 
 		try {
 			// First, create a song record in the database
-			const songTitle = description.trim() || `Song ${new Date().toLocaleDateString()}`;
-			const songResponse = await fetch("/api/song", {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify({
-					title: songTitle,
-					description: description.trim() || undefined,
-					user_id: user.id,
-					status: "processing",
-					parameters: {
-						prompt: description,
-						originalVideoUrl: recordedVideo,
-					},
-				}),
-			});
+			const songId = crypto.randomUUID();
+const songTitle = description.trim() || `Song ${new Date().toLocaleDateString()}`;
+const songResponse = await fetch("/api/song", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    id: songId,
+    title: songTitle,
+    email: user.email,
+    wav_data: null, // Will be updated after generation
+    status: "processing",
+  }),
+});
 
-			if (!songResponse.ok) {
-				throw new Error("Failed to create song record");
-			}
+if (!songResponse.ok) {
+  throw new Error("Failed to create song record");
+}
 
-			const songData = await songResponse.json();
+const songData = await songResponse.json();
 			console.log("Created song record:", songData);
 
 			// Redirect to dashboard to show the processing song
@@ -433,10 +431,11 @@ function CreatePage() {
 						uploadFormData.append("songId", songData.id);
 						uploadFormData.append("title", songTitle);
 						if (user.email) {
-  uploadFormData.append("email", user.email);
-}
+							uploadFormData.append("email", user.email);
+						}
 
-						const uploadResponse = await fetch("/api/song", {
+						// Use /api/upload for binary upload, not /api/song
+						const uploadResponse = await fetch("/api/upload", {
 							method: "POST",
 							body: uploadFormData,
 						});

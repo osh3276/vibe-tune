@@ -59,39 +59,49 @@ export default function DashboardPage() {
   }, [user, loading, router]);
 
   useEffect(() => {
-    if (user) {
-      fetchUserSongs();
-    }
-  }, [user]);
-
-  // Separate effect for polling
-  useEffect(() => {
-    const hasProcessingSongs = songs.some(song => song.status === "processing");
-    if (hasProcessingSongs && user) {
-      const interval = setInterval(fetchUserSongs, 5000); // Poll every 5 seconds
-      return () => clearInterval(interval);
-    }
-  }, [songs, user]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const fetchUserSongs = async () => {
-    try {
-      setLoadingSongs(true);
-      const response = await fetch("/api/song");
-      if (response.ok) {
-        const allSongs = await response.json();
-        // Filter songs for current user (RLS should handle this, but double-check)
-        const userSongs = allSongs.filter((song: Song) => song.user_id === user?.id);
-        setSongs(userSongs);
+    const fetchUserSongs = async () => {
+      try {
+        setLoadingSongs(true);
+        if (!user?.email) return;
+        const response = await fetch(
+          `/api/song?email=${encodeURIComponent(user.email)}`
+        );
+        if (response.ok) {
+          const userSongs = await response.json();
+          setSongs(userSongs);
+        }
+      } catch (error) {
+        console.error("Error fetching songs:", error);
+      } finally {
+        setLoadingSongs(false);
       }
-    } catch (error) {
-      console.error("Error fetching songs:", error);
-    } finally {
-      setLoadingSongs(false);
+    };
+    if (user) {
+      // Add a slight delay before first fetch to avoid spamming
+      const timeout = setTimeout(() => {
+      fetchUserSongs();
+      }, 3000);
+
+      return () => clearTimeout(timeout);
     }
-  };
+
+    // Polling for processing songs
+    const hasProcessingSongs = songs.some((song) => song.status === "processing");
+    let interval: NodeJS.Timeout | undefined;
+    if (hasProcessingSongs && user) {
+      interval = setInterval(fetchUserSongs, 5000); // Poll every 15 seconds
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [user, songs]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleDeleteSong = async (songId: string, songTitle: string) => {
-    if (!confirm(`Are you sure you want to delete "${songTitle}"? This action cannot be undone.`)) {
+    if (
+      !confirm(
+        `Are you sure you want to delete "${songTitle}"? This action cannot be undone.`
+      )
+    ) {
       return;
     }
 
@@ -105,7 +115,7 @@ export default function DashboardPage() {
       }
 
       // Remove the song from the local state
-      setSongs(songs.filter(song => song.id !== songId));
+      setSongs(songs.filter((song) => song.id !== songId));
     } catch (err) {
       console.error("Error deleting song:", err);
       alert("Failed to delete song");
@@ -129,12 +139,17 @@ export default function DashboardPage() {
     return null; // Will redirect in useEffect
   }
 
-  const completedSongs = songs.filter(song => song.status === "completed").length;
-  const processingSongs = songs.filter(song => song.status === "processing").length;
-  const thisMonthSongs = songs.filter(song => {
+  const completedSongs = songs.filter((song) => song.status === "completed")
+    .length;
+  const processingSongs = songs.filter((song) => song.status === "processing")
+    .length;
+  const thisMonthSongs = songs.filter((song) => {
     const songDate = new Date(song.created_at);
     const now = new Date();
-    return songDate.getMonth() === now.getMonth() && songDate.getFullYear() === now.getFullYear();
+    return (
+      songDate.getMonth() === now.getMonth() &&
+      songDate.getFullYear() === now.getFullYear()
+    );
   }).length;
 
   const getStatusColor = (status: string) => {
@@ -259,7 +274,9 @@ export default function DashboardPage() {
                   <p className="text-[#3fd342] text-sm font-medium">
                     Total Songs
                   </p>
-                  <p className="text-3xl font-bold text-[#030c03]">{songs.length}</p>
+                  <p className="text-3xl font-bold text-[#030c03]">
+                    {songs.length}
+                  </p>
                 </div>
                 <div className="w-12 h-12 bg-[#3fd342]/20 rounded-lg flex items-center justify-center">
                   <Music className="h-6 w-6 text-[#3fd342]" />
@@ -275,7 +292,9 @@ export default function DashboardPage() {
                   <p className="text-[#668bd9] text-sm font-medium">
                     This Month
                   </p>
-                  <p className="text-3xl font-bold text-[#030c03]">{thisMonthSongs}</p>
+                  <p className="text-3xl font-bold text-[#030c03]">
+                    {thisMonthSongs}
+                  </p>
                 </div>
                 <div className="w-12 h-12 bg-[#668bd9]/20 rounded-lg flex items-center justify-center">
                   <TrendingUp className="h-6 w-6 text-[#668bd9]" />
@@ -291,7 +310,9 @@ export default function DashboardPage() {
                   <p className="text-[#8fd1e3] text-sm font-medium">
                     Processing
                   </p>
-                  <p className="text-3xl font-bold text-[#030c03]">{processingSongs}</p>
+                  <p className="text-3xl font-bold text-[#030c03]">
+                    {processingSongs}
+                  </p>
                 </div>
                 <div className="w-12 h-12 bg-[#8fd1e3]/20 rounded-lg flex items-center justify-center">
                   <Clock className="h-6 w-6 text-[#8fd1e3]" />
