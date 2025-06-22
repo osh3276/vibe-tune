@@ -23,7 +23,7 @@ function CreatePage() {
 	const [recordingTime, setRecordingTime] = useState(0);
 	const [maxRecordingTime] = useState(30); // 30 seconds max
 	const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([]);
-	const [selectedCamera, setSelectedCamera] = useState<string>("");
+	const [selectedCameraId, setSelectedCameraId] = useState<string>("");
 	const [showCameraSelector, setShowCameraSelector] = useState(false);
 	const { user, loading, signOut } = useAuth();
 	const router = useRouter();
@@ -49,8 +49,8 @@ function CreatePage() {
 				setAvailableCameras(videoDevices);
 				
 				// Set first camera as default if available
-				if (videoDevices.length > 0 && !selectedCamera) {
-					setSelectedCamera(videoDevices[0].deviceId);
+				if (videoDevices.length > 0 && !selectedCameraId) {
+					setSelectedCameraId(videoDevices[0].deviceId);
 				}
 				
 				// Stop the initial permission stream
@@ -62,7 +62,7 @@ function CreatePage() {
 		}
 		
 		getAvailableCameras();
-	}, [selectedCamera]);
+	}, [selectedCameraId]);
 
 	const videoRef = useRef<HTMLVideoElement>(null);
 	const playbackVideoRef = useRef<HTMLVideoElement>(null);
@@ -75,11 +75,23 @@ function CreatePage() {
 	// Cleanup intervals on unmount
 	useEffect(() => {
 		return () => {
+			// Cleanup intervals
 			if (countdownIntervalRef.current) {
 				clearInterval(countdownIntervalRef.current);
 			}
 			if (recordingIntervalRef.current) {
 				clearInterval(recordingIntervalRef.current);
+			}
+			
+			// Stop media stream
+			if (streamRef.current) {
+				streamRef.current.getTracks().forEach((track) => track.stop());
+				streamRef.current = null;
+			}
+			
+			// Stop media recorder
+			if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+				mediaRecorderRef.current.stop();
 			}
 		};
 	}, []);
@@ -110,10 +122,11 @@ function CreatePage() {
 
 		// Detect best mimeType for browser compatibility (without audio codecs since we disabled audio)
 		function getSupportedMimeType() {
-			// Use video-only codecs since we're not recording audio
-			const possibleTypes = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm", "video/mp4"];
+			// Prefer MP4 for better compatibility with AI models
+			const possibleTypes = ["video/mp4", "video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"];
 			for (const type of possibleTypes) {
 				if (MediaRecorder.isTypeSupported(type)) {
+					console.log("Using mime type:", type);
 					return type;
 				}
 			}
@@ -322,7 +335,7 @@ function CreatePage() {
 				video: {
 					width: { ideal: 1920 },
 					height: { ideal: 1080 },
-					deviceId: selectedCamera ? { exact: selectedCamera } : undefined
+					deviceId: selectedCameraId ? { exact: selectedCameraId } : undefined
 				},
 				audio: false, // Disable audio recording
 			};
@@ -342,7 +355,7 @@ function CreatePage() {
 			console.error("Error accessing camera:", error);
 			alert("Unable to access camera. Please check permissions.");
 		}
-	}, [startCountdown, selectedCamera]);
+	}, [startCountdown, selectedCameraId]);
 	const handleSubmit = async () => {
 		if (!recordedVideo) {
 			alert("Please record a video first!");
@@ -475,6 +488,45 @@ function CreatePage() {
 	// Calculate progress percentage for recording (ensure it doesn't exceed 100%)
 	const recordingProgress = Math.min((recordingTime / maxRecordingTime) * 100, 100);
 
+	// Set up camera preview in normal mode
+	useEffect(() => {
+		async function setupCameraPreview() {
+			// Only set up preview in idle mode when no video is recorded
+			if (recordingState === 'idle' && !recordedVideo && selectedCameraId && !streamRef.current) {
+				try {
+					console.log('Setting up camera preview for normal mode');
+					const constraints = {
+						video: {
+							width: { ideal: 1920 },
+							height: { ideal: 1080 },
+							deviceId: selectedCameraId ? { exact: selectedCameraId } : undefined
+						},
+						audio: false,
+					};
+
+					const stream = await navigator.mediaDevices.getUserMedia(constraints);
+					streamRef.current = stream;
+					
+					if (videoRef.current) {
+						videoRef.current.srcObject = stream;
+						console.log('Camera preview set up in normal mode');
+					}
+				} catch (error) {
+					console.error('Error setting up camera preview:', error);
+				}
+			}
+		}
+
+		setupCameraPreview();
+		
+		// Cleanup function
+		return () => {
+			if (recordingState === 'idle' && streamRef.current) {
+				// Don't stop the stream in cleanup, it will be managed elsewhere
+			}
+		};
+	}, [recordingState, recordedVideo, selectedCameraId]);
+
 	return (
 		<div className="min-h-screen bg-gradient-to-br from-[#f9f9f7] to-[#f4f3ef]">
 			{/* Navigation */}
@@ -522,7 +574,7 @@ function CreatePage() {
 										console.log("Video stream connected to video element in Theatre Mode");
 									}}
 									style={{ 
-										display: recordingState === 'recording' || recordingState === 'countdown' ? 'block' : 'none',
+										display: recordingState !== 'playback' ? 'block' : 'none',
 										minHeight: '360px',  // Ensure minimum height
 										width: '100%',
 										height: '100%',
@@ -604,12 +656,12 @@ function CreatePage() {
 															<button
 																key={camera.deviceId}
 																className={`w-full text-left px-3 py-2 rounded text-sm ${
-																	selectedCamera === camera.deviceId
+																	selectedCameraId === camera.deviceId
 																		? "bg-[#3fd342]/20 text-white"
 																		: "text-gray-300 hover:bg-white/10"
 																}`}
 																onClick={() => {
-																	setSelectedCamera(camera.deviceId);
+																	setSelectedCameraId(camera.deviceId);
 																	setShowCameraSelector(false);
 																}}
 															>
@@ -755,7 +807,7 @@ function CreatePage() {
 												className="bg-white/20 border-white/30 text-white hover:bg-white/30 backdrop-blur-sm flex items-center gap-2"
 											>
 												<Camera className="h-4 w-4" />
-												{availableCameras.find(c => c.deviceId === selectedCamera)?.label || "Select Camera"}
+												{availableCameras.find(c => c.deviceId === selectedCameraId)?.label || "Select Camera"}
 												<svg className="h-4 w-4 ml-1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
 											</Button>
 
@@ -771,12 +823,12 @@ function CreatePage() {
 																<button
 																	key={camera.deviceId}
 																	className={`w-full text-left px-3 py-2 rounded text-sm ${
-																		selectedCamera === camera.deviceId
+																		selectedCameraId === camera.deviceId
 																			? "bg-[#3fd342]/20 text-white"
 																			: "text-gray-300 hover:bg-white/10"
 																	}`}
 																	onClick={() => {
-																		setSelectedCamera(camera.deviceId);
+																		setSelectedCameraId(camera.deviceId);
 																		setShowCameraSelector(false);
 																	}}
 																>

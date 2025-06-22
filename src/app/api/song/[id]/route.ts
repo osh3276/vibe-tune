@@ -44,19 +44,37 @@ export async function PUT(
 
   try {
     const body = await req.json();
-    const { title, description } = body;
+    const { title, description, status, file_url, id } = body;
 
-    if (!title?.trim()) {
+    // If we're updating status/file_url (from generation process), don't require title
+    const isStatusUpdate = status !== undefined || file_url !== undefined;
+    
+    if (!isStatusUpdate && !title?.trim()) {
       return NextResponse.json({ error: "Title is required" }, { status: 400 });
     }
 
     const updates: any = {
-      title: title.trim(),
       updated_at: new Date().toISOString(),
     };
 
+    // Only update title if provided
+    if (title !== undefined) {
+      updates.title = title.trim();
+    }
+
+    // Only update description if provided
     if (description !== undefined) {
       updates.description = description?.trim() || null;
+    }
+
+    // Update status if provided (for generation process)
+    if (status !== undefined) {
+      updates.status = status;
+    }
+
+    // Update file_url if provided (for generation process)
+    if (file_url !== undefined) {
+      updates.file_url = file_url;
     }
 
     const { data, error } = await supabase
