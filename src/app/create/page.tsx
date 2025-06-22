@@ -7,7 +7,6 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Music, Video, Camera, Mic, ArrowLeft, Play, Square, X, Sparkles } from "lucide-react";
 
 function CreatePage() {
@@ -24,12 +23,6 @@ function CreatePage() {
 	const [maxRecordingTime] = useState(30); // 30 seconds max
 	const { user, loading, signOut } = useAuth();
 	const router = useRouter();
-
-	useEffect(() => {
-		if (!loading && !user) {
-			router.push("/login");
-		}
-	}, [user, loading, router]);
 	const videoRef = useRef<HTMLVideoElement>(null);
 	const playbackVideoRef = useRef<HTMLVideoElement>(null);
 	const streamRef = useRef<MediaStream | null>(null);
@@ -37,6 +30,13 @@ function CreatePage() {
 	const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 	const mediaRecorderRef = useRef<MediaRecorder | null>(null);
 	const chunksRef = useRef<Blob[]>([]);
+
+	useEffect(() => {
+		if (!loading && !user) {
+			router.push("/login");
+		}
+	}, [user, loading, router]);
+	
 
 	// Cleanup intervals on unmount
 	useEffect(() => {
@@ -304,31 +304,36 @@ function CreatePage() {
 			const response = await fetch(recordedVideo);
 			const videoBlob = await response.blob();
 
-			// Convert video blob to base64
-			const videoBase64 = await videoBlobToBase64(videoBlob);
+			// Prepare FormData for binary upload
+			const formData = new FormData();
+			formData.append("video", videoBlob, "video.webm"); // or video.mp4 if that's your type
+			formData.append("userText", description);
+			formData.append("title", "My Generated Song");
 
 			// Call the song generation API
-			const apiResponse = await fetch("/api/generate-song", {
+			console.log("Submitting video for song generation...");
+			const apiResponse = await fetch("/api/generate", {
 				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify({
-					videoBase64,
-					userText: description,
-					title: "My Generated Song",
-				}),
+				body: formData,
 			});
 
-			if (!apiResponse.ok) {
+			const contentType = apiResponse.headers.get("content-type") || "";
+
+			if (contentType.includes("application/json")) {
 				const errorData = await apiResponse.json();
 				throw new Error(errorData.error || "Failed to generate song");
+			} else if (contentType.includes("audio/wav")) {
+				const audioBlob = await apiResponse.blob();
+				// You can now play, download, or process the audioBlob as needed
+				// For example, to play:
+				const audioUrl = URL.createObjectURL(audioBlob);
+				const audio = new Audio(audioUrl);
+				audio.play();
+				alert("🎉 Song generated and playing! Check your downloads or console for the audio file.");
+				// Optionally, you could trigger a download here
+			} else {
+				throw new Error("Unexpected response from server");
 			}
-
-			const result = await apiResponse.json();
-
-			// Show success message
-			alert(`🎉 Song generated successfully!\n\nSong ID: ${result.songId}\nDuration: ${Math.round(result.duration)}s\n\nCheck the console for detailed logs.`);
 
 			// Reset the form
 			setRecordedVideo(null);
@@ -340,21 +345,6 @@ function CreatePage() {
 		} finally {
 			setIsGenerating(false);
 		}
-	};
-
-	// Utility function to convert video blob to base64
-	const videoBlobToBase64 = (blob: Blob): Promise<string> => {
-		return new Promise((resolve, reject) => {
-			const reader = new FileReader();
-			reader.onload = () => {
-				const result = reader.result as string;
-				// Remove the data URL prefix (e.g., "data:video/mp4;base64,")
-				const base64 = result.split(",")[1];
-				resolve(base64);
-			};
-			reader.onerror = reject;
-			reader.readAsDataURL(blob);
-		});
 	};
 
 	// Calculate progress percentage for recording (ensure it doesn't exceed 100%)
