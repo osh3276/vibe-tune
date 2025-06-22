@@ -72,6 +72,28 @@ export async function processVideoWithGemini(
       } catch (error: any) {
         lastError = error;
         console.error(`Gemini API error (attempt ${attempt}):`, error);
+=======
+      } catch (error: unknown) {
+=======
+        const rawResponse = response.text();
+        console.log("Original Gemini response:", rawResponse);
+        console.log("Gemini prompt:", rawResponse);
+        return rawResponse;
+      } catch (error: any) {
+        lastError = error;
+        console.error(`Gemini API error (attempt ${attempt}):`, error);
+
+        // If it's a rate limit or temporary error, wait before retrying
+>>>>>>> origin/feature/saving-tracks
+        if (
+          typeof error === "object" && error !== null &&
+          (("status" in error && (error as any).status === 500) ||
+           ("status" in error && (error as any).status === 429) ||
+           ("message" in error && typeof (error as any).message === "string" && ((error as any).message.includes("Internal Server Error") || (error as any).message.includes("internal error"))))
+        ) {
+          lastError = error;
+          console.error(`Gemini API error (attempt ${attempt}):`, error);
+>>>>>>> Stashed changes
 
         // If it's a rate limit or temporary error, wait before retrying
         if (
@@ -134,6 +156,7 @@ export async function processVideoWithGemini(
     }
   }
 }
+<<<<<<< Updated upstream
 
 function buildSystemInstruction(): string {
   return `
@@ -181,3 +204,30 @@ ADDITIONAL RULES:
   - If the subject is standing still or barely moving, still generate output by interpreting their posture, subtle micro-movements, and facial expressions as energy indicators.
   `;
 }
+=======
+<<<<<<< HEAD
+=======
+
+function buildSystemInstruction(): string {
+  return `
+You are a music prompt generator for Lyria AI. Create detailed, comprehensive music prompts that capture exactly what you see in the video.
+
+GUIDELINES:
+- Generate detailed music descriptions with specific technical elements
+- Include: genre, BPM, instruments, production techniques, mixing style, vocal style
+- Be specific about sound design, effects, and musical arrangements
+- Describe energy, mood, and musical progression
+- Use professional music production terminology
+
+EXAMPLE OUTPUTS:
+"Aggressive trap beat at 140 BPM. Heavy 808 bassline with hard-hitting kick and snare patterns. Use distorted synth leads and dark, gritty sound design for an intense mood. Add ad-libs and vocal chops with heavy autotune and aggressive mixing for a sinister tone."
+
+"Upbeat indie pop song at 128 BPM with jangly electric guitar arpeggios, warm analog synth pads, steady four-on-the-floor kick drum, and bright vocals with slight reverb. Major key progression with nostalgic summer vibes, layered harmonies in the chorus, and a driving bassline."
+
+"Mellow lo-fi hip hop at 85 BPM featuring dusty vinyl samples, warm jazz piano chords, subtle vinyl crackle, laid-back drum loop with soft kick and snare, and atmospheric pad textures. Dreamy and nostalgic mood with tape saturation and analog warmth."
+
+Analyze the video for movement, energy, and emotion, then create a comprehensive musical description that includes all technical details needed for high-quality music generation.
+  `;
+}
+>>>>>>> origin/feature/saving-tracks
+>>>>>>> Stashed changes
