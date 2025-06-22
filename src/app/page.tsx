@@ -130,7 +130,7 @@ export default function Home() {
 							ease: "easeOut",
 						}}
 					>
-						<div className="max-w-4xl mt-10 mx-auto flex flex-col items-center self-stretch">
+						<div className="max-w-[100rem] mt-10 mx-auto flex flex-col items-center self-stretch">
 							<h1 className="text-8xl mb-6 text-[#030c03] tracking-tight font-semibold font-display">
 								Turn Moments into{" "}
 								<span className="bg-gradient-to-r from-[#3fd342] to-[#668bd9] bg-clip-text text-transparent">
@@ -142,7 +142,7 @@ export default function Home() {
 								Record a short video and let AI generate a
 								unique song just fit for your vibe.
 							</p>
-							<div className="flex flex-col sm:flex-row gap-4 justify-center">
+							<div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
 								<Link href="/create">
 									<Button
 										size="lg"
@@ -162,6 +162,21 @@ export default function Home() {
 										Watch Demo
 									</Button>
 								</Link>
+							</div>
+
+							{/* Dashboard Preview Image */}
+							<div className="relative group w-full max-w-[80vw]">
+								{/* Animated gradient border on hover */}
+								<div className="absolute -inset-3 bg-gradient-to-r from-[#3fd342] via-[#8fd1e3] to-[#668bd9] rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 blur-md"></div>
+
+								{/* Main image container */}
+								<div className="relative bg-[#fcf8f2] rounded-2xl overflow-hidden shadow-2xl transition-all duration-300 group-hover:shadow-[0_25px_50px_-12px_rgba(0,0,0,0.3)]">
+									<img
+										src="/dashboard.png"
+										alt="VibeTune Dashboard Preview"
+										className="w-full h-auto object-cover rounded-2xl"
+									/>
+								</div>
 							</div>
 						</div>
 					</motion.section>
