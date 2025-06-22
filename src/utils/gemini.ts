@@ -101,7 +101,7 @@ You must generate a prompt in the following structured format
 
 ADDITIONAL RULES:
   - Be as specific, highly imaginative, and vivid as possible. Your output directly controls AI music generation.
-  - The output has a character limit of 2000 characters and CANNOT EXCEED IT, do what you must to ensure the character limit is met.
+  - The output has a character limit of 1750 characters and CANNOT EXCEED IT.
   - Keep the output CONCISE. Avoid repeating yourself and using formatting syntax.
   - Use musical language: e.g. "sparse and reverb-heavy", "staccato bursts", "steady build-up to drop".
   - Label every change in movement or intensity as a song section and describe it clearly.
