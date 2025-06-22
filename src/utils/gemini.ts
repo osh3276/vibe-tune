@@ -18,10 +18,14 @@ export function videoBlobToBase64(blob: Blob): Promise<string> {
   });
 }
 
-export async function processVideoWithGemini(videoBase64: string, userText?: string): Promise<string> {
+export async function processVideoWithGemini(videoFile: File, userText?: string): Promise<string> {
   if (!GEMINI_API_KEY) {
     throw new Error("Missing Gemini API Key");
   }
+
+  // Node.js/server: Read the file as base64 using Buffer
+  const arrayBuffer = await videoFile.arrayBuffer();
+  const videoBase64 = Buffer.from(arrayBuffer).toString("base64");
 
   const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
   const model = genAI.getGenerativeModel({ 
@@ -36,7 +40,7 @@ export async function processVideoWithGemini(videoBase64: string, userText?: str
     const content: any[] = [
       {
         inlineData: {
-          mimeType: "video/mp4",
+          mimeType: videoFile.type || "video/mp4",
           data: videoBase64,
         },
       },
@@ -50,7 +54,6 @@ export async function processVideoWithGemini(videoBase64: string, userText?: str
     }
 
     const result = await model.generateContent(content);
-
     const response = await result.response;
     console.log("Gemini response received");
     return response.text();
@@ -106,120 +109,3 @@ ADDITIONAL RULES:
   - If the subject is standing still or barely moving, still generate output by interpreting their posture, subtle micro-movements, and facial expressions as energy indicators.
   `;
 }
-
-// function buildSystemInstruction(): string {
-//   return `
-// ROLE:
-// You are a Video-to-Music Translator AI.
-
-// MISSION:
-// Your only task is to analyze human body movement, energy, rhythm, and emotional expression in video, and translate this into a structured description that can be used by an AI music generator.
-
-// RULES:
-// - Completely ignore clothing, appearance, objects, background, setting, lighting, or camera position.
-// - Completely ignore audio or spoken words.
-// - DO NOT describe people's physical features (age, gender, hair, clothing, accessories, location, etc).
-// - ONLY analyze:
-//   - Movement intensity
-//   - Gestures
-//   - Dance-like actions
-//   - Headbanging, swaying, stillness vs. motion
-//   - Emotional energy expressed through movement
-//   - Tempo and rhythm suggested by body motions
-// - Use musical language to describe energy (e.g. "slow and graceful", "fast and explosive", "sharp staccato motions").
-
-// OUTPUT FORMAT:
-// Strictly follow this structure:
-
-// Overall Vibe:
-// (A short high-level summary of the subject's energy as it relates to music.)
-
-// Suggested Music Genres:
-// (3-5 genres fitting the visual energy.)
-
-// Movement Characteristics:
-// (Detailed description of movement, gestures, rhythm, and physical intensity.)
-
-// Emotional Tone:
-// (Emotions visually expressed.)
-
-// Tempo Estimate (BPM):
-// (Approximate tempo range, based on visual rhythm.)
-
-// Instrument Suggestions:
-// (Instrument types that fit the vibe.)
-
-// 🔥 Example output:
-
-// Overall Vibe:
-// Smooth, playful, rhythmic energy with consistent swaying and expressive hand gestures.
-
-// Suggested Music Genres:
-// Funk, Chillwave, Indie Pop, Lo-Fi Hip Hop, R&B
-
-// Movement Characteristics:
-// Gentle swaying of the upper body, fluid arm movements, side-to-side hand gestures, consistent rhythm in movement matching a mid-tempo groove.
-
-// Emotional Tone:
-// Joyful, relaxed, confident, playful.
-
-// Tempo Estimate (BPM):
-// 90-110 BPM
-
-// Instrument Suggestions:
-// Electric bass, smooth synth pads, rhythmic hand percussion, soft electric guitar, light drum grooves.
-
-// IMPORTANT:
-// - If the subject is standing still or barely moving, still generate output by interpreting their posture, subtle micro-movements, and facial expressions as energy indicators.
-// - Be highly imaginative — your output directly controls AI music generation.
-
-// EXAMPLES:
-// (These are "training shots" embedded into the prompt.)
-
-// Example 1
-// Input Video:
-// A person dancing energetically in front of a brick wall, wearing a yellow hoodie, jeans, and sneakers. Their arms swing wildly, they jump in place, and their head bobs rapidly. They smile constantly.
-
-// Desired Output:
-// Overall Vibe:
-// Explosive high-energy dancing with fast, chaotic movement.
-
-// Suggested Music Genres:
-// Electronic Dance Music (EDM), Dubstep, Hyperpop, Techno, Hardstyle
-
-// Movement Characteristics:
-// Rapid arm flailing, vertical jumping, bouncing footwork, fast head bobbing, full-body commitment to energetic dance.
-
-// Emotional Tone:
-// Exhilarated, joyful, uninhibited.
-
-// Tempo Estimate (BPM):
-// 150-180 BPM
-
-// Instrument Suggestions:
-// Thumping bass, distorted synth leads, heavy kick drums, fast-paced hi-hats, risers, and drops.
-
-// Example 2
-// Input Video:
-// A person sitting still in a chair, barely moving, with closed eyes and a calm expression.
-
-// Desired Output:
-// Overall Vibe:
-// Peaceful, introspective stillness.
-
-// Suggested Music Genres:
-// Ambient, Chillwave, Lo-Fi, New Age, Downtempo Electronica
-
-// Movement Characteristics:
-// Minimal motion, relaxed posture, closed eyes, subtle breathing rhythm, micro facial expressions of calm.
-
-// Emotional Tone:
-// Tranquil, meditative, contemplative.
-
-// Tempo Estimate (BPM):
-// 60-80 BPM
-
-// Instrument Suggestions:
-// Soft synth pads, ambient textures, gentle keys, atmospheric reverb, minimal percussion.
-// `;
-// }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { GoogleAuth } from "google-auth-library";
 import decode from "audio-decode";
 import axios, { AxiosResponse } from "axios";
+import {processVideoWithGemini, videoBlobToBase64} from "@/utils/gemini"; // Adjust import based on your project structure
 
 export async function POST(request: NextRequest) {
 	const auth = new GoogleAuth({
@@ -9,26 +10,35 @@ export async function POST(request: NextRequest) {
 		scopes: ["https://www.googleapis.com/auth/cloud-platform"],
 	});
 
+	console.log(request);
+
 	const client = await auth.getClient();
 	const token = await client.getAccessToken();
 	console.log("Access token:", token);
 
 	try {
-		const body = await request.json();
-		const { prompt, negativeTags } = body;
+		// Use formData for binary uploads
+		const formData = await request.formData();
+		const videoFile = formData.get("video") as File;
+		const userText = formData.get("userText") as string;
+		const title = formData.get("title") as string;
 
-		if (!prompt) {
-			return NextResponse.json(
-				{ error: "Prompt is required" },
-				{ status: 400 },
-			);
+		if (!videoFile || !title) {
+			return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
 		}
 
+		// Example: read video file as ArrayBuffer (if needed for AI API)
+		// const videoBuffer = Buffer.from(await videoFile.arrayBuffer());
+		// If you want to use Gemini, you can call:
+		// const geminiPrompt = await processVideoWithGemini(videoFile, userText);
+		// console.log('Gemini prompt:', geminiPrompt);
+
+		// Prepare payload for Google Cloud AI model
 		const payload = {
 			instances: [
 				{
-					prompt: prompt,
-					negative_prompt: negativeTags || "",
+					prompt: userText,
+					negative_prompt: "",
 				},
 			],
 			parameters: {},
@@ -90,7 +100,7 @@ export async function POST(request: NextRequest) {
 				status: 200,
 				headers: {
 					"Content-Type": "audio/wav",
-					"Content-Disposition": `attachment; filename="generated-song-${Date.now()}.wav"`,
+					"Content-Disposition": `attachment; filename=\"generated-song-${Date.now()}.wav\"`,
 					"Content-Length": audioBuffer.length.toString(),
 					"X-Audio-Duration": audioData.duration.toString(),
 					"X-Audio-Sample-Rate": audioData.sampleRate.toString(),
