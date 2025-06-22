@@ -67,7 +67,7 @@ function CreatePage() {
 	const videoRef = useRef<HTMLVideoElement>(null);
 	const playbackVideoRef = useRef<HTMLVideoElement>(null);
 	const streamRef = useRef<MediaStream | null>(null);
-	const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
+		const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
 	const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 	const mediaRecorderRef = useRef<MediaRecorder | null>(null);
 	const chunksRef = useRef<Blob[]>([]);
@@ -431,8 +431,12 @@ function CreatePage() {
 						const uploadFormData = new FormData();
 						uploadFormData.append("audio", audioBlob, `${songData.id}.wav`);
 						uploadFormData.append("songId", songData.id);
+						uploadFormData.append("title", songTitle);
+						if (user.email) {
+  uploadFormData.append("email", user.email);
+}
 
-						const uploadResponse = await fetch("/api/upload", {
+						const uploadResponse = await fetch("/api/song", {
 							method: "POST",
 							body: uploadFormData,
 						});
@@ -627,7 +631,7 @@ function CreatePage() {
 								<Button 
 									onClick={exitTheatreMode} 
 									variant="ghost" 
-									size="lg" 
+								size="lg" 
 									className="bg-black/50 hover:bg-black/70 backdrop-blur-sm text-white rounded-full p-3 border border-white/20"
 								>
 									<X className="h-5 w-5" />
@@ -638,7 +642,7 @@ function CreatePage() {
 										<Button 
 											onClick={() => setShowCameraSelector(!showCameraSelector)} 
 											variant="ghost"
-											size="lg"
+										size="lg"
 											className="bg-black/50 hover:bg-black/70 backdrop-blur-sm text-white rounded-full p-3 border border-white/20"
 										>
 											<Camera className="h-5 w-5" />
