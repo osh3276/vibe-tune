@@ -48,7 +48,7 @@ export async function PUT(
 
     // If we're updating status/file_url (from generation process), don't require title
     const isStatusUpdate = status !== undefined || file_url !== undefined;
-    
+
     if (!isStatusUpdate && !title?.trim()) {
       return NextResponse.json({ error: "Title is required" }, { status: 400 });
     }
@@ -114,11 +114,46 @@ export async function DELETE(
     return NextResponse.json({ error: "Missing song id" }, { status: 400 });
   }
 
-  const { error } = await supabase.from("songs").delete().eq("id", songId);
+  try {
+    // First, get the song to check if it has a file
+    const { data: song, error: fetchError } = await supabase
+      .from("songs")
+      .select("file_url")
+      .eq("id", songId)
+      .single();
 
-  if (error) {
-    console.error("Supabase delete error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    if (fetchError && fetchError.code !== "PGRST116") {
+      console.error("Error fetching song:", fetchError);
+      return NextResponse.json({ error: fetchError.message }, { status: 500 });
+    }
+
+    // Delete the song record from database
+    const { error: deleteError } = await supabase
+      .from("songs")
+      .delete()
+      .eq("id", songId);
+
+    if (deleteError) {
+      console.error("Supabase delete error:", deleteError);
+      return NextResponse.json({ error: deleteError.message }, { status: 500 });
+    }
+
+    // If song had a file, try to delete it from storage
+    if (song?.file_url) {
+      const filePath = `songs/${songId}.wav`;
+      const { error: storageError } = await supabase.storage
+        .from('songs')
+        .remove([filePath]);
+
+      if (storageError) {
+        console.warn("Warning: Failed to delete file from storage:", storageError);
+        // Don't fail the request if storage deletion fails
+      }
+    }
+
+    return NextResponse.json({ message: "Song deleted successfully" }, { status: 200 });
+  } catch (error) {
+    console.error("Error deleting song:", error);
+    return NextResponse.json({ error: "Failed to delete song" }, { status: 500 });
   }
-  return NextResponse.json({ message: "Song deleted" }, { status: 200 });
 }
