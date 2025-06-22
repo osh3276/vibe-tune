@@ -31,22 +31,6 @@ export async function POST(request: NextRequest) {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    // Create uploads directory if it doesn't exist
-    const uploadsDir = path.join(process.cwd(), "public", "uploads", "songs");
-    if (!existsSync(uploadsDir)) {
-      await mkdir(uploadsDir, { recursive: true });
-    }
-
-    // Generate filename
-    const filename = `${songId}.wav`;
-    const filepath = path.join(uploadsDir, filename);
-
-    // Write file
-    await writeFile(filepath, buffer);
-
-    // Return the public URL
-    const fileUrl = `/uploads/songs/${filename}`;
-
     // Insert/update song in Supabase
     const supabase = await createServerSupabaseClient();
     const { error: dbError } = await supabase
@@ -66,7 +50,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ 
       success: true, 
-      fileUrl 
     });
 
   } catch (error) {

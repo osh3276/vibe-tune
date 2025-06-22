@@ -73,3 +73,38 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+export async function PUT(req: NextRequest) {
+  try {
+    const supabase = await createClient();
+    const body = await req.json();
+    const { id, file_url, status } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: "Missing song id" }, { status: 400 });
+    }
+
+    const updateData: any = {};
+    if (file_url !== undefined) updateData.file_url = file_url;
+    if (status !== undefined) updateData.status = status;
+
+    const { data, error } = await supabase
+      .from("songs")
+      .update(updateData)
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Supabase update error:", error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error("API error:", error);
+    return NextResponse.json(
+      { error: "Invalid request body" },
+      { status: 400 },
+    );
+  }
+}
