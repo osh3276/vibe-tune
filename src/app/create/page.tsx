@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Music, Video, Camera, Mic, ArrowLeft, Play, Square, X, Sparkles } from "lucide-react";
+import { Music, Video, Camera, Mic, ArrowLeft, Play, Square, X, Sparkles, Settings } from "lucide-react";
 
 function CreatePage() {
 	// Recording states
@@ -22,6 +22,9 @@ function CreatePage() {
 	const [countdown, setCountdown] = useState(3);
 	const [recordingTime, setRecordingTime] = useState(0);
 	const [maxRecordingTime] = useState(30); // 30 seconds max
+	const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([]);
+	const [selectedCameraId, setSelectedCameraId] = useState<string>("");
+	const [showCameraSelector, setShowCameraSelector] = useState(false);
 	const { user, loading, signOut } = useAuth();
 	const router = useRouter();
 
@@ -30,6 +33,37 @@ function CreatePage() {
 			router.push("/login");
 		}
 	}, [user, loading, router]);
+	
+	// Get available cameras when component mounts
+	useEffect(() => {
+		async function getAvailableCameras() {
+			try {
+				// First, check if we have permission to access cameras
+				const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+				
+				// After getting permission, list all video devices
+				const devices = await navigator.mediaDevices.enumerateDevices();
+				const videoDevices = devices.filter(device => device.kind === 'videoinput');
+				
+				console.log('Available cameras:', videoDevices);
+				setAvailableCameras(videoDevices);
+				
+				// Set first camera as default if available
+				if (videoDevices.length > 0 && !selectedCameraId) {
+					setSelectedCameraId(videoDevices[0].deviceId);
+				}
+				
+				// Stop the initial permission stream
+				stream.getTracks().forEach(track => track.stop());
+			} catch (err) {
+				console.error('Error getting camera list:', err);
+				alert('Unable to access camera. Please check your camera permissions.');
+			}
+		}
+		
+		getAvailableCameras();
+	}, [selectedCameraId]);
+
 	const videoRef = useRef<HTMLVideoElement>(null);
 	const playbackVideoRef = useRef<HTMLVideoElement>(null);
 	const streamRef = useRef<MediaStream | null>(null);
@@ -41,11 +75,23 @@ function CreatePage() {
 	// Cleanup intervals on unmount
 	useEffect(() => {
 		return () => {
+			// Cleanup intervals
 			if (countdownIntervalRef.current) {
 				clearInterval(countdownIntervalRef.current);
 			}
 			if (recordingIntervalRef.current) {
 				clearInterval(recordingIntervalRef.current);
+			}
+			
+			// Stop media stream
+			if (streamRef.current) {
+				streamRef.current.getTracks().forEach((track) => track.stop());
+				streamRef.current = null;
+			}
+			
+			// Stop media recorder
+			if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+				mediaRecorderRef.current.stop();
 			}
 		};
 	}, []);
@@ -64,7 +110,6 @@ function CreatePage() {
 			});
 		}
 	}, [recordingState, recordedVideo]);
-
 	const startActualRecording = useCallback(() => {
 		if (!streamRef.current) {
 			console.error("No stream available for recording");
@@ -75,16 +120,13 @@ function CreatePage() {
 		chunksRef.current = [];
 		setRecordedChunks([]);
 
-		// Detect best mimeType for browser compatibility
+		// Detect best mimeType for browser compatibility (without audio codecs since we disabled audio)
 		function getSupportedMimeType() {
-			const possibleTypes = [
-				"video/webm;codecs=vp9,opus",
-				"video/webm;codecs=vp8,opus",
-				"video/webm",
-				"video/mp4",
-			];
+			// Prefer MP4 for better compatibility with AI models
+			const possibleTypes = ["video/mp4", "video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"];
 			for (const type of possibleTypes) {
 				if (MediaRecorder.isTypeSupported(type)) {
+					console.log("Using mime type:", type);
 					return type;
 				}
 			}
@@ -95,6 +137,13 @@ function CreatePage() {
 		if (!mimeType) {
 			alert("Your browser does not support video recording. Please use Chrome or a browser with MediaRecorder support.");
 			return;
+		}
+
+		// Ensure the video element is displaying the stream
+		if (videoRef.current && streamRef.current) {
+			// Re-assign the stream to ensure it's visible
+			videoRef.current.srcObject = streamRef.current;
+			console.log("Video stream connected to video element during recording");
 		}
 
 		const recorder = new MediaRecorder(streamRef.current, {
@@ -118,6 +167,7 @@ function CreatePage() {
 			}
 			
 			const blob = new Blob(chunksRef.current, { type: mimeType });
+			console.log("Created blob:", blob.size, "bytes, type:", blob.type);
 			const url = URL.createObjectURL(blob);
 			console.log("Created URL:", url);
 			
@@ -172,6 +222,13 @@ function CreatePage() {
 
 	const startCountdown = useCallback(() => {
 		console.log("Starting countdown...");
+		
+		// Ensure video element shows the stream during countdown
+		if (videoRef.current && streamRef.current) {
+			videoRef.current.srcObject = streamRef.current;
+			console.log("Reconnected video stream for countdown");
+		}
+		
 		setRecordingState('countdown');
 		setCountdown(3);
 		
@@ -252,7 +309,6 @@ function CreatePage() {
 			setCountdown(3);
 		}
 	}, [recordedVideo, recordingState, mediaRecorder]);
-
 	const startRecording = useCallback(async () => {
 		try {
 			console.log("Starting recording process...");
@@ -274,14 +330,18 @@ function CreatePage() {
 				recordingIntervalRef.current = null;
 			}
 
-			// Get camera access
-			const stream = await navigator.mediaDevices.getUserMedia({
+			// Get camera access with selected camera
+			const constraints = {
 				video: {
 					width: { ideal: 1920 },
 					height: { ideal: 1080 },
+					deviceId: selectedCameraId ? { exact: selectedCameraId } : undefined
 				},
-				audio: true,
-			});
+				audio: false, // Disable audio recording
+			};
+			
+			console.log('Using camera constraints:', constraints);
+			const stream = await navigator.mediaDevices.getUserMedia(constraints);
 
 			streamRef.current = stream;
 			if (videoRef.current) {
@@ -295,26 +355,177 @@ function CreatePage() {
 			console.error("Error accessing camera:", error);
 			alert("Unable to access camera. Please check permissions.");
 		}
-	}, [startCountdown]);
-
+	}, [startCountdown, selectedCameraId]);
 	const handleSubmit = async () => {
 		if (!recordedVideo) {
 			alert("Please record a video first!");
 			return;
 		}
 
+		if (!user) {
+			alert("Please log in to create songs!");
+			return;
+		}
+
 		setIsGenerating(true);
 
-		// Simulate API call
-		setTimeout(() => {
+		try {
+			// First, create a song record in the database
+			const songTitle = description.trim() || `Song ${new Date().toLocaleDateString()}`;
+			const songResponse = await fetch("/api/song", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					title: songTitle,
+					description: description.trim() || undefined,
+					user_id: user.id,
+					status: "processing",
+					parameters: {
+						prompt: description,
+						originalVideoUrl: recordedVideo,
+					},
+				}),
+			});
+
+			if (!songResponse.ok) {
+				throw new Error("Failed to create song record");
+			}
+
+			const songData = await songResponse.json();
+			console.log("Created song record:", songData);
+
+			// Redirect to dashboard to show the processing song
+			router.push("/dashboard");
+
+			// Continue with generation in the background
+			setTimeout(async () => {
+				try {
+					// Convert video URL back to blob
+					const response = await fetch(recordedVideo);
+					const videoBlob = await response.blob();
+
+					// Prepare FormData for binary upload
+					const formData = new FormData();
+					formData.append("video", videoBlob, "video.webm");
+					formData.append("userText", description);
+					formData.append("title", songTitle);
+
+					// Call the song generation API
+					console.log("Submitting video for song generation...");
+					const apiResponse = await fetch("/api/generate", {
+						method: "POST",
+						body: formData,
+					});
+
+					const contentType = apiResponse.headers.get("content-type") || "";
+
+					if (contentType.includes("application/json")) {
+						const errorData = await apiResponse.json();
+						throw new Error(errorData.error || "Failed to generate song");
+					} else if (contentType.includes("audio/wav")) {
+						const audioBlob = await apiResponse.blob();
+
+						// Upload the audio file to get a persistent URL
+						const uploadFormData = new FormData();
+						uploadFormData.append("audio", audioBlob, `${songData.id}.wav`);
+						uploadFormData.append("songId", songData.id);
+
+						const uploadResponse = await fetch("/api/upload", {
+							method: "POST",
+							body: uploadFormData,
+						});
+
+						if (!uploadResponse.ok) {
+							throw new Error("Failed to upload audio file");
+						}
+
+						const uploadData = await uploadResponse.json();
+
+						// Update the song record with the file URL and completed status
+						await fetch(`/api/song/${songData.id}`, {
+							method: "PUT",
+							headers: {
+								"Content-Type": "application/json",
+							},
+							body: JSON.stringify({
+								file_url: uploadData.fileUrl,
+								status: "completed",
+							}),
+						});
+
+						console.log("Song generation completed successfully!");
+					} else {
+						throw new Error("Unexpected response from server");
+					}
+				} catch (error) {
+					console.error("Song generation error:", error);
+
+					// Update the song record to failed status
+					await fetch(`/api/song/${songData.id}`, {
+						method: "PUT",
+						headers: {
+							"Content-Type": "application/json",
+						},
+						body: JSON.stringify({
+							status: "failed",
+						}),
+					});
+				}
+			}, 1000);
+		} catch (error) {
+			console.error("Song creation error:", error);
+			alert(
+				error instanceof Error
+					? error.message
+					: "Failed to create song. Please try again."
+			);
 			setIsGenerating(false);
-			// Redirect to song view page
-			window.location.href = "/song/123";
-		}, 3000);
+		}
 	};
 
 	// Calculate progress percentage for recording (ensure it doesn't exceed 100%)
 	const recordingProgress = Math.min((recordingTime / maxRecordingTime) * 100, 100);
+
+	// Set up camera preview in normal mode
+	useEffect(() => {
+		async function setupCameraPreview() {
+			// Only set up preview in idle mode when no video is recorded
+			if (recordingState === 'idle' && !recordedVideo && selectedCameraId && !streamRef.current) {
+				try {
+					console.log('Setting up camera preview for normal mode');
+					const constraints = {
+						video: {
+							width: { ideal: 1920 },
+							height: { ideal: 1080 },
+							deviceId: selectedCameraId ? { exact: selectedCameraId } : undefined
+						},
+						audio: false,
+					};
+
+					const stream = await navigator.mediaDevices.getUserMedia(constraints);
+					streamRef.current = stream;
+					
+					if (videoRef.current) {
+						videoRef.current.srcObject = stream;
+						console.log('Camera preview set up in normal mode');
+					}
+				} catch (error) {
+					console.error('Error setting up camera preview:', error);
+				}
+			}
+		}
+
+		setupCameraPreview();
+		
+		// Cleanup function
+		return () => {
+			if (recordingState === 'idle' && streamRef.current) {
+				// Don't stop the stream in cleanup, it will be managed elsewhere
+			}
+		};
+	}, [recordingState, recordedVideo, selectedCameraId]);
 
 	return (
 		<div className="min-h-screen bg-gradient-to-br from-[#f9f9f7] to-[#f4f3ef]">
@@ -359,6 +570,16 @@ function CreatePage() {
 									muted
 									playsInline
 									className="w-full h-full object-cover rounded-lg"
+									onLoadedMetadata={() => {
+										console.log("Video stream connected to video element in Theatre Mode");
+									}}
+									style={{ 
+										display: recordingState !== 'playback' ? 'block' : 'none',
+										minHeight: '360px',  // Ensure minimum height
+										width: '100%',
+										height: '100%',
+										backgroundColor: 'black'  // Black background for visibility
+									}}
 								/>
 							)}
 
@@ -401,18 +622,58 @@ function CreatePage() {
 										</Button>
 									</div>
 								</>
-							)}
-
-							{/* Exit Theatre Mode Button */}
-							<div className="absolute top-8 left-8">
-								<Button
-									onClick={exitTheatreMode}
-									variant="ghost"
-									size="lg"
+							)}							{/* Exit Theatre Mode Button */}
+							<div className="absolute top-8 left-8 flex items-center gap-2">
+								<Button 
+									onClick={exitTheatreMode} 
+									variant="ghost" 
+									size="lg" 
 									className="bg-black/50 hover:bg-black/70 backdrop-blur-sm text-white rounded-full p-3 border border-white/20"
 								>
 									<X className="h-5 w-5" />
 								</Button>
+								
+								{recordingState !== 'playback' && (
+									<div className="relative">
+										<Button 
+											onClick={() => setShowCameraSelector(!showCameraSelector)} 
+											variant="ghost"
+											size="lg"
+											className="bg-black/50 hover:bg-black/70 backdrop-blur-sm text-white rounded-full p-3 border border-white/20"
+										>
+											<Camera className="h-5 w-5" />
+										</Button>
+
+										{/* Camera Dropdown in Theatre Mode */}
+										{showCameraSelector && (
+											<div className="absolute top-full mt-2 w-64 bg-black/80 backdrop-blur-sm rounded-lg p-2 border border-white/20 shadow-lg z-10">
+												<div className="text-white text-sm font-semibold mb-2 px-2">Select Camera Source</div>
+												{availableCameras.length === 0 ? (
+													<div className="text-gray-400 text-sm p-2">No cameras detected</div>
+												) : (
+													<div className="space-y-1 max-h-40 overflow-auto">
+														{availableCameras.map((camera) => (
+															<button
+																key={camera.deviceId}
+																className={`w-full text-left px-3 py-2 rounded text-sm ${
+																	selectedCameraId === camera.deviceId
+																		? "bg-[#3fd342]/20 text-white"
+																		: "text-gray-300 hover:bg-white/10"
+																}`}
+																onClick={() => {
+																	setSelectedCameraId(camera.deviceId);
+																	setShowCameraSelector(false);
+																}}
+															>
+																{camera.label || `Camera ${camera.deviceId.substring(0, 5)}...`}
+															</button>
+														))}
+													</div>
+												)}
+											</div>
+										)}
+									</div>
+								)}
 							</div>
 
 							{/* Playback Controls */}
@@ -506,10 +767,9 @@ function CreatePage() {
 			{recordingState === 'idle' && (
 				<div className="flex h-[calc(100vh-88px)]">
 					{/* Main Camera Section */}
-					<div className="flex-1 p-6 flex flex-col">
-						<div className="text-center mb-6">
+					<div className="flex-1 p-6 flex flex-col">						<div className="text-center mb-6">
 							<h1 className="text-4xl font-bold text-[#030c03] mb-2">Create Your Song</h1>
-							<p className="text-[#030c03]/70">Record a video to capture your mood and let AI generate your unique song</p>
+							<p className="text-[#030c03]/70">Record a video (without audio) to capture your mood and let AI generate your unique song</p>
 						</div>
 
 						{/* Large Camera/Video Display */}
@@ -528,12 +788,60 @@ function CreatePage() {
 										muted
 										playsInline
 										className="w-full h-full object-cover"
+										onLoadedMetadata={() => {
+											console.log("Video stream connected in normal mode");
+										}}
+										style={{ 
+											backgroundColor: 'black',  // Black background for visibility
+											minHeight: '240px'  // Ensure minimum height
+										}}
 									/>
-								)}
-
-								{/* Start Recording Button */}
+								)}								{/* Camera Selection & Start Recording Button */}
 								{!recordedVideo && (
-									<div className="absolute bottom-8 left-1/2 transform -translate-x-1/2">
+									<div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 flex flex-col gap-4 items-center">
+										{/* Camera Selection Button */}
+										<div className="relative">
+											<Button 
+												onClick={() => setShowCameraSelector(!showCameraSelector)} 
+												variant="outline" 
+												className="bg-white/20 border-white/30 text-white hover:bg-white/30 backdrop-blur-sm flex items-center gap-2"
+											>
+												<Camera className="h-4 w-4" />
+												{availableCameras.find(c => c.deviceId === selectedCameraId)?.label || "Select Camera"}
+												<svg className="h-4 w-4 ml-1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+											</Button>
+
+											{/* Camera Dropdown */}
+											{showCameraSelector && (
+												<div className="absolute bottom-full mb-2 w-64 bg-black/80 backdrop-blur-sm rounded-lg p-2 border border-white/20 shadow-lg z-10">
+													<div className="text-white text-sm font-semibold mb-2 px-2">Select Camera Source</div>
+													{availableCameras.length === 0 ? (
+														<div className="text-gray-400 text-sm p-2">No cameras detected</div>
+													) : (
+														<div className="space-y-1 max-h-40 overflow-auto">
+															{availableCameras.map((camera) => (
+																<button
+																	key={camera.deviceId}
+																	className={`w-full text-left px-3 py-2 rounded text-sm ${
+																		selectedCameraId === camera.deviceId
+																			? "bg-[#3fd342]/20 text-white"
+																			: "text-gray-300 hover:bg-white/10"
+																	}`}
+																	onClick={() => {
+																		setSelectedCameraId(camera.deviceId);
+																		setShowCameraSelector(false);
+																	}}
+																>
+																	{camera.label || `Camera ${camera.deviceId.substring(0, 5)}...`}
+																</button>
+															))}
+														</div>
+													)}
+												</div>
+											)}
+										</div>
+
+										{/* Start Recording Button */}
 										<Button
 											onClick={startRecording}
 											size="lg"
