@@ -3,6 +3,21 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_MODEL = "gemini-2.5-flash";
 
+// Utility function to convert video blob to base64
+export function videoBlobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      // Remove the data URL prefix (e.g., "data:video/mp4;base64,")
+      const base64 = result.split(',')[1];
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
 export async function processVideoWithGemini(videoBase64: string, userText?: string): Promise<string> {
   if (!GEMINI_API_KEY) {
     throw new Error("Missing Gemini API Key");

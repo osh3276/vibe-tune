@@ -4,13 +4,7 @@ import { useAuth } from "@/lib/auth";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import {
-	Card,
-	CardContent,
-	CardDescription,
-	CardHeader,
-	CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Music, LogOut, Video, Plus } from "lucide-react";
 import Link from "next/link";
 
@@ -46,23 +40,11 @@ export default function DashboardPage() {
 				<div className="max-w-7xl mx-auto flex items-center justify-between">
 					<div className="flex items-center space-x-3">
 						<Music className="h-8 w-8 text-[#3fd342]" />
-						<span className="text-2xl font-bold text-[#030c03]">
-							VibeTune
-						</span>
+						<span className="text-2xl font-bold text-[#030c03]">VibeTune</span>
 					</div>
 					<div className="flex items-center space-x-4">
-						<span className="text-sm text-[#030c03]/70">
-							Welcome,{" "}
-							{user.user_metadata?.first_name ||
-								user.user_metadata?.full_name ||
-								user.email?.split("@")[0]}
-							!
-						</span>
-						<Button
-							onClick={signOut}
-							variant="ghost"
-							className="text-[#030c03] hover:bg-[#030c03]/10"
-						>
+						<span className="text-sm text-[#030c03]/70">Welcome, {user.user_metadata?.first_name || user.user_metadata?.full_name || user.email?.split("@")[0]}!</span>
+						<Button onClick={signOut} variant="ghost" className="text-[#030c03] hover:bg-[#030c03]/10">
 							<LogOut className="h-4 w-4 mr-2" />
 							Sign Out
 						</Button>
@@ -73,12 +55,8 @@ export default function DashboardPage() {
 			{/* Main Content */}
 			<main className="max-w-7xl mx-auto px-6 py-12">
 				<div className="mb-8">
-					<h1 className="text-6xl font-bold text-[#030c03] mb-2 font-display">
-						Dashboard
-					</h1>
-					<p className="text-[#030c03]/60 text-lg mt-5">
-						Create amazing music from your videos with AI
-					</p>
+					<h1 className="text-6xl font-bold text-[#030c03] mb-2 font-display">Dashboard</h1>
+					<p className="text-[#030c03]/60 text-lg mt-5">Create amazing music from your videos with AI</p>
 				</div>
 
 				{/* Quick Actions */}
@@ -90,13 +68,8 @@ export default function DashboardPage() {
 								<div className="w-12 h-12 bg-[#3fd342] rounded-lg flex items-center justify-center mb-4">
 									<Video className="h-6 w-6 text-[#030c03]" />
 								</div>
-								<CardTitle className="text-[#030c03]">
-									Create New Song
-								</CardTitle>
-								<CardDescription className="text-[#030c03]/70">
-									Upload a video and let AI create your unique
-									song
-								</CardDescription>
+								<CardTitle className="text-[#030c03]">Create New Song</CardTitle>
+								<CardDescription className="text-[#030c03]/70">Upload a video and let AI create your unique song</CardDescription>
 							</CardHeader>
 							<CardContent>
 								<Link href="/create">
@@ -110,28 +83,16 @@ export default function DashboardPage() {
 
 						<Card className="bg-white/80 border-[#8fd1e3]/30">
 							<CardHeader>
-								<CardTitle className="text-[#030c03]">
-									Account
-								</CardTitle>
-								<CardDescription className="text-[#030c03]/70">
-									Manage your account settings
-								</CardDescription>
+								<CardTitle className="text-[#030c03]">Account</CardTitle>
+								<CardDescription className="text-[#030c03]/70">Manage your account settings</CardDescription>
 							</CardHeader>
 							<CardContent>
 								<div className="space-y-2 text-sm">
 									<p className="text-[#030c03]/80">
-										<span className="font-medium">
-											Email:
-										</span>{" "}
-										{user.email}
+										<span className="font-medium">Email:</span> {user.email}
 									</p>
 									<p className="text-[#030c03]/80">
-										<span className="font-medium">
-											Member since:
-										</span>{" "}
-										{new Date(
-											user.created_at,
-										).toLocaleDateString()}
+										<span className="font-medium">Member since:</span> {new Date(user.created_at).toLocaleDateString()}
 									</p>
 								</div>
 							</CardContent>
@@ -142,20 +103,13 @@ export default function DashboardPage() {
 					<div className="col-span-2 flex flex-col">
 						<Card className="bg-white/80 border-[#8fd1e3]/30 flex-1">
 							<CardHeader>
-								<CardTitle className="text-[#030c03]">
-									Recent Activity
-								</CardTitle>
-								<CardDescription className="text-[#030c03]/70">
-									Your latest songs and projects
-								</CardDescription>
+								<CardTitle className="text-[#030c03]">Recent Activity</CardTitle>
+								<CardDescription className="text-[#030c03]/70">Your latest songs and projects</CardDescription>
 							</CardHeader>
 							<CardContent>
 								<div className="text-center py-12">
 									<Music className="h-16 w-16 text-[#030c03]/20 mx-auto mb-4" />
-									<p className="text-[#030c03]/60">
-										No activity yet. Create your first song
-										to get started!
-									</p>
+									<p className="text-[#030c03]/60">No activity yet. Create your first song to get started!</p>
 								</div>
 							</CardContent>
 						</Card>
