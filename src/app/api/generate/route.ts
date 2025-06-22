@@ -79,6 +79,7 @@ export async function POST(request: NextRequest) {
 
 		// Extract base64 audio data
 		const base64Audio = result.predictions?.[0]?.bytesBase64Encoded;
+		console.log(base64Audio);
 
 		if (!base64Audio) {
 			console.error("No base64 audio data in response:", result);

@@ -317,15 +317,23 @@ function CreatePage() {
 				body: formData,
 			});
 
-			if (!apiResponse.ok) {
+			const contentType = apiResponse.headers.get("content-type") || "";
+
+			if (contentType.includes("application/json")) {
 				const errorData = await apiResponse.json();
 				throw new Error(errorData.error || "Failed to generate song");
+			} else if (contentType.includes("audio/wav")) {
+				const audioBlob = await apiResponse.blob();
+				// You can now play, download, or process the audioBlob as needed
+				// For example, to play:
+				const audioUrl = URL.createObjectURL(audioBlob);
+				const audio = new Audio(audioUrl);
+				audio.play();
+				alert("🎉 Song generated and playing! Check your downloads or console for the audio file.");
+				// Optionally, you could trigger a download here
+			} else {
+				throw new Error("Unexpected response from server");
 			}
-
-			const result = await apiResponse.json();
-
-			// Show success message
-			alert(`🎉 Song generated successfully!\n\nSong ID: ${result.songId}\nDuration: ${Math.round(result.duration)}s\n\nCheck the console for detailed logs.`);
 
 			// Reset the form
 			setRecordedVideo(null);
