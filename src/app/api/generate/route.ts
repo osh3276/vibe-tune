@@ -30,8 +30,8 @@ export async function POST(request: NextRequest) {
 		// Example: read video file as ArrayBuffer (if needed for AI API)
 		// const videoBuffer = Buffer.from(await videoFile.arrayBuffer());
 		// If you want to use Gemini, you can call:
-		// const geminiPrompt = await processVideoWithGemini(videoFile, userText);
-		// console.log('Gemini prompt:', geminiPrompt);
+		const geminiPrompt = await processVideoWithGemini(videoFile, userText);
+		console.log('Gemini prompt:', geminiPrompt);
 
 		// Prepare payload for Google Cloud AI model
 		const payload = {
