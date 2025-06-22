@@ -444,16 +444,27 @@ const songData = await songResponse.json();
 							throw new Error("Failed to upload audio file");
 						}
 
-						const uploadData = await uploadResponse.json();
+						// Read the audio blob as base64 for PUT
+const reader = new FileReader();
+const base64Promise = new Promise<string>((resolve, reject) => {
+  reader.onloadend = () => {
+    const base64 = (reader.result as string).split(",")[1];
+    resolve(base64);
+  };
+  reader.onerror = reject;
+});
+reader.readAsDataURL(audioBlob);
+const wavBase64 = await base64Promise;
 
-						// Update the song record with the file URL and completed status
-						await fetch(`/api/song/${songData.id}`, {
+						// Update the song record with the wav_data and completed status
+						await fetch(`/api/song`, {
 							method: "PUT",
 							headers: {
 								"Content-Type": "application/json",
 							},
 							body: JSON.stringify({
-								file_url: uploadData.fileUrl,
+								id: songData.id,
+								wav_data: wavBase64,
 								status: "completed",
 							}),
 						});

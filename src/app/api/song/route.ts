@@ -78,14 +78,14 @@ export async function PUT(req: NextRequest) {
   try {
     const supabase = await createClient();
     const body = await req.json();
-    const { id, file_url, status } = body;
+    const { id, wav_data, status } = body;
 
     if (!id) {
       return NextResponse.json({ error: "Missing song id" }, { status: 400 });
     }
 
     const updateData: any = {};
-    if (file_url !== undefined) updateData.file_url = file_url;
+    if (wav_data !== undefined) updateData.wav_data = wav_data;
     if (status !== undefined) updateData.status = status;
 
     const { data, error } = await supabase
